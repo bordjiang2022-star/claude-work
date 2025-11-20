@@ -1,0 +1,90 @@
+LiveTranslate v2.0 - 完整文件清单
+=====================================
+
+总计: 56个文件
+
+核心文档 (6个):
+  [✓] README.md
+  [✓] INSTALL.md
+  [✓] PROJECT_SUMMARY.md
+  [✓] PACKAGE_GUIDE.md
+  [✓] QUICK_TEST.md
+  [✓] .gitignore
+
+配置文件 (3个):
+  [✓] .env.example
+  [✓] start.bat
+  [✓] start.sh
+
+后端 backend/ (6个):
+  [✓] main.py
+  [✓] auth.py
+  [✓] database.py
+  [✓] translation_service.py
+  [✓] audio_control.py
+  [✓] requirements.txt
+
+前端 frontend/ (37个):
+  [✓] package.json
+  [✓] vite.config.ts
+  [✓] tsconfig.json
+  [✓] tsconfig.node.json
+  [✓] tailwind.config.js
+  [✓] postcss.config.js
+  [✓] index.html
+
+  frontend/src/:
+    [✓] App.tsx
+    [✓] main.tsx
+    [✓] index.css
+
+  frontend/src/components/ (4个):
+    [✓] Header.tsx
+    [✓] LanguageSelector.tsx
+    [✓] TranscriptPanel.tsx
+    [✓] TranslationControls.tsx
+
+  frontend/src/pages/ (2个):
+    [✓] LoginPage.tsx
+    [✓] TranslatePage.tsx
+
+  frontend/src/hooks/ (2个):
+    [✓] useAuthStore.ts
+    [✓] useTranslationStore.ts
+
+  frontend/src/services/ (2个):
+    [✓] api.ts
+    [✓] websocket.ts
+
+  frontend/src/i18n/ (6个):
+    [✓] config.ts
+    [✓] locales/en.json
+    [✓] locales/zh.json
+    [✓] locales/zh-TW.json
+    [✓] locales/ja.json
+    [✓] locales/ko.json
+
+  frontend/src/types/ (1个):
+    [✓] index.ts
+
+Python模块 (2个):
+  [✓] livetranslate_client.py
+  [✓] main.py
+
+工具目录 tools/:
+  [!] nircmd.exe (需要单独下载)
+
+需要单独下载/安装:
+  [ ] nircmd.exe - https://www.nirsoft.net/utils/nircmd.html
+  [ ] Python依赖 - pip install -r backend/requirements.txt
+  [ ] Node.js依赖 - npm install (在frontend目录)
+  [ ] VB-Cable驱动 - https://vb-audio.com/Cable/
+
+验证命令:
+  find . -type f ! -path "./.git/*" ! -path "*/node_modules/*" ! -path "*/venv/*" | wc -l
+
+应显示: 56
+
+=====================================
+更新时间: 2025-11-20 06:09
+压缩包: claude-work-livetranslate-v2.0.zip (61 KB)

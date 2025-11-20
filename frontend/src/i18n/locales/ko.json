@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "LiveTranslate",
+    "subtitle": "실시간 음성 번역 서비스"
+  },
+  "auth": {
+    "login": "로그인",
+    "register": "가입",
+    "email": "이메일",
+    "password": "비밀번호",
+    "confirmPassword": "비밀번호 확인",
+    "forgotPassword": "비밀번호를 잊으셨나요?",
+    "dontHaveAccount": "계정이 없으신가요?",
+    "alreadyHaveAccount": "이미 계정이 있으신가요?",
+    "logout": "로그아웃"
+  },
+  "translation": {
+    "targetLanguage": "목표 언어",
+    "ttsVoice": "TTS 음성",
+    "start": "시작",
+    "stop": "정지",
+    "translating": "번역 중",
+    "source": "원문 (Source)",
+    "translation": "번역 (Translation)",
+    "waitingForInput": "음성 입력을 기다리는 중...",
+    "waitingForTranslation": "번역 결과를 기다리는 중...",
+    "characterCount": "{{count}} 자"
+  },
+  "languages": {
+    "en": "영어 (English)",
+    "zh": "중국어",
+    "ja": "일본어",
+    "ko": "한국어",
+    "ru": "러시아어",
+    "fr": "프랑스어",
+    "de": "독일어",
+    "pt": "포르투갈어",
+    "es": "스페인어",
+    "it": "이탈리아어",
+    "yue": "광동어"
+  },
+  "voices": {
+    "Cherry": "Cherry (여성)",
+    "Nofish": "Nofish (남성)",
+    "Sunny": "Sunny",
+    "Jada": "Jada",
+    "Dylan": "Dylan",
+    "Peter": "Peter",
+    "Eric": "Eric",
+    "Kiki": "Kiki (광동어)"
+  },
+  "transcript": {
+    "title": "실시간 녹취록",
+    "clear": "지우기",
+    "download": "다운로드",
+    "downloadSource": "원문 다운로드",
+    "downloadTranslation": "번역 다운로드",
+    "noData": "녹취록 데이터가 없습니다..."
+  },
+  "statistics": {
+    "title": "사용 통계",
+    "totalSessions": "총 세션 수",
+    "totalDuration": "총 시간",
+    "totalCharacters": "총 번역 문자 수",
+    "lastUpdated": "마지막 업데이트"
+  },
+  "settings": {
+    "title": "설정",
+    "language": "인터페이스 언어",
+    "theme": "테마",
+    "light": "라이트",
+    "dark": "다크",
+    "audioDevice": "오디오 장치"
+  },
+  "common": {
+    "save": "저장",
+    "cancel": "취소",
+    "confirm": "확인",
+    "close": "닫기",
+    "loading": "로딩 중...",
+    "error": "오류",
+    "success": "성공"
+  }
+}

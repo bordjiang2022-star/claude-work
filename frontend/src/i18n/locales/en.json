@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "LiveTranslate",
+    "subtitle": "Real-time Voice Translation Service"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "dontHaveAccount": "Don't have an account?",
+    "alreadyHaveAccount": "Already have an account?",
+    "logout": "Logout"
+  },
+  "translation": {
+    "targetLanguage": "Target Language",
+    "ttsVoice": "TTS Voice",
+    "start": "START",
+    "stop": "STOP",
+    "translating": "Translating",
+    "source": "Source",
+    "translation": "Translation",
+    "waitingForInput": "Waiting for voice input...",
+    "waitingForTranslation": "Waiting for translation result...",
+    "characterCount": "{{count}} characters"
+  },
+  "languages": {
+    "en": "English",
+    "zh": "Chinese (Simplified)",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ru": "Russian",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "es": "Spanish",
+    "it": "Italian",
+    "yue": "Cantonese"
+  },
+  "voices": {
+    "Cherry": "Cherry (Female)",
+    "Nofish": "Nofish (Male)",
+    "Sunny": "Sunny",
+    "Jada": "Jada",
+    "Dylan": "Dylan",
+    "Peter": "Peter",
+    "Eric": "Eric",
+    "Kiki": "Kiki (Cantonese)"
+  },
+  "transcript": {
+    "title": "Real-time Transcript",
+    "clear": "Clear",
+    "download": "Download",
+    "downloadSource": "Download Source",
+    "downloadTranslation": "Download Translation",
+    "noData": "No transcript data yet..."
+  },
+  "statistics": {
+    "title": "Usage Statistics",
+    "totalSessions": "Total Sessions",
+    "totalDuration": "Total Duration",
+    "totalCharacters": "Total Characters Translated",
+    "lastUpdated": "Last Updated"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Interface Language",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "audioDevice": "Audio Device"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  }
+}

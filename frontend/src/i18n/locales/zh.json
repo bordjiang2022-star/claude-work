@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "LiveTranslate",
+    "subtitle": "实时语音翻译服务"
+  },
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "forgotPassword": "忘记密码？",
+    "dontHaveAccount": "还没有账号？",
+    "alreadyHaveAccount": "已有账号？",
+    "logout": "退出登录"
+  },
+  "translation": {
+    "targetLanguage": "目标语言",
+    "ttsVoice": "TTS音色",
+    "start": "开始",
+    "stop": "停止",
+    "translating": "翻译中",
+    "source": "原文 (Source)",
+    "translation": "译文 (Translation)",
+    "waitingForInput": "等待音频输入...",
+    "waitingForTranslation": "等待翻译结果...",
+    "characterCount": "{{count}} 字"
+  },
+  "languages": {
+    "en": "英语 (English)",
+    "zh": "中文",
+    "ja": "日语",
+    "ko": "韩语",
+    "ru": "俄语",
+    "fr": "法语",
+    "de": "德语",
+    "pt": "葡萄牙语",
+    "es": "西班牙语",
+    "it": "意大利语",
+    "yue": "粤语"
+  },
+  "voices": {
+    "Cherry": "Cherry (女声)",
+    "Nofish": "Nofish (男声)",
+    "Sunny": "晴儿 Sunny",
+    "Jada": "阿珍 Jada",
+    "Dylan": "晓东 Dylan",
+    "Peter": "李彼得 Peter",
+    "Eric": "程川 Eric",
+    "Kiki": "阿清 Kiki (粤语)"
+  },
+  "transcript": {
+    "title": "实时转录",
+    "clear": "清空",
+    "download": "下载",
+    "downloadSource": "下载原文",
+    "downloadTranslation": "下载译文",
+    "noData": "暂无转录数据..."
+  },
+  "statistics": {
+    "title": "使用统计",
+    "totalSessions": "总会话数",
+    "totalDuration": "总时长",
+    "totalCharacters": "总翻译字符数",
+    "lastUpdated": "最后更新"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "界面语言",
+    "theme": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "audioDevice": "音频设备"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "close": "关闭",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功"
+  }
+}

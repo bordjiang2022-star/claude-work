@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "LiveTranslate",
+    "subtitle": "リアルタイム音声翻訳サービス"
+  },
+  "auth": {
+    "login": "ログイン",
+    "register": "登録",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "confirmPassword": "パスワード確認",
+    "forgotPassword": "パスワードをお忘れですか？",
+    "dontHaveAccount": "アカウントをお持ちでないですか？",
+    "alreadyHaveAccount": "すでにアカウントをお持ちですか？",
+    "logout": "ログアウト"
+  },
+  "translation": {
+    "targetLanguage": "翻訳先言語",
+    "ttsVoice": "TTS音声",
+    "start": "開始",
+    "stop": "停止",
+    "translating": "翻訳中",
+    "source": "原文 (Source)",
+    "translation": "訳文 (Translation)",
+    "waitingForInput": "音声入力を待っています...",
+    "waitingForTranslation": "翻訳結果を待っています...",
+    "characterCount": "{{count}} 文字"
+  },
+  "languages": {
+    "en": "英語 (English)",
+    "zh": "中国語",
+    "ja": "日本語",
+    "ko": "韓国語",
+    "ru": "ロシア語",
+    "fr": "フランス語",
+    "de": "ドイツ語",
+    "pt": "ポルトガル語",
+    "es": "スペイン語",
+    "it": "イタリア語",
+    "yue": "広東語"
+  },
+  "voices": {
+    "Cherry": "Cherry (女性)",
+    "Nofish": "Nofish (男性)",
+    "Sunny": "Sunny",
+    "Jada": "Jada",
+    "Dylan": "Dylan",
+    "Peter": "Peter",
+    "Eric": "Eric",
+    "Kiki": "Kiki (広東語)"
+  },
+  "transcript": {
+    "title": "リアルタイム文字起こし",
+    "clear": "クリア",
+    "download": "ダウンロード",
+    "downloadSource": "原文をダウンロード",
+    "downloadTranslation": "訳文をダウンロード",
+    "noData": "文字起こしデータがありません..."
+  },
+  "statistics": {
+    "title": "使用統計",
+    "totalSessions": "総セッション数",
+    "totalDuration": "総時間",
+    "totalCharacters": "総翻訳文字数",
+    "lastUpdated": "最終更新"
+  },
+  "settings": {
+    "title": "設定",
+    "language": "インターフェース言語",
+    "theme": "テーマ",
+    "light": "ライト",
+    "dark": "ダーク",
+    "audioDevice": "オーディオデバイス"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "confirm": "確認",
+    "close": "閉じる",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功"
+  }
+}

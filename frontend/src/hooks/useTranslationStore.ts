@@ -86,23 +86,35 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   },
 
   downloadTranscript: async (type) => {
-    const { currentSessionId } = get();
-    if (!currentSessionId) {
-      throw new Error('No active session');
+    const { transcripts, currentSessionId } = get();
+
+    if (transcripts.length === 0) {
+      throw new Error('No transcripts to download');
     }
 
     try {
-      const blob = await apiService.downloadTranscript(currentSessionId, type);
+      // 生成文本内容
+      const content = transcripts
+        .map((t) => {
+          const timestamp = new Date(t.timestamp).toLocaleTimeString();
+          const text = type === 'source' ? t.source_text : t.translated_text;
+          return text ? `[${timestamp}] ${text}` : null;
+        })
+        .filter(Boolean)
+        .join('\n');
+
+      // 创建Blob并下载
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `transcript_${type}_${currentSessionId}.txt`;
+      a.download = `transcript_${type}_${currentSessionId || Date.now()}.txt`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error: any) {
-      const message = error.response?.data?.detail || 'Failed to download transcript';
+      const message = error.message || 'Failed to download transcript';
       set({ error: message });
       throw error;
     }

@@ -246,12 +246,13 @@ async def stop_translation(
     # 恢复默认音频设备
     audio_controller.restore_default_device()
 
-    # 更新会话记录
+    # 更新会话记录（取最新的一个未结束会话）
     result = await db.execute(
         select(TranslationSession)
         .where(TranslationSession.user_id == current_user.id)
         .where(TranslationSession.ended_at.is_(None))
         .order_by(TranslationSession.started_at.desc())
+        .limit(1)
     )
     session = result.scalar_one_or_none()
 

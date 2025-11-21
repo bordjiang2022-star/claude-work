@@ -5,12 +5,13 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 import io
+import httpx
 
 from database import init_db, get_db, User, TranslationSession, Transcript, UserStatistics
 from auth import (
@@ -497,6 +498,53 @@ async def websocket_endpoint(
             manager.disconnect(user_id)
         finally:
             break
+
+
+# ============ TTS代理端点 ============
+
+@app.get("/api/tts/proxy")
+async def tts_proxy(text: str, lang: str = "en"):
+    """
+    代理Google TTS请求以避免CORS问题
+    参数:
+        text: 要转换为语音的文本
+        lang: 语言代码（如 en, zh, ja）
+    """
+    try:
+        # Google Translate TTS API
+        encoded_text = httpx.QueryParams({"q": text})
+        url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl={lang}&{encoded_text}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                },
+                timeout=10.0
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Google TTS API returned status {response.status_code}"
+                )
+
+            # 返回音频数据
+            return Response(
+                content=response.content,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "Access-Control-Allow-Origin": "*"
+                }
+            )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="TTS request timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"TTS request failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 # ============ 健康检查 ============

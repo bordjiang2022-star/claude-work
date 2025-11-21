@@ -91,17 +91,29 @@ class TTSService {
         // 将语言代码转换为Google TTS格式（去掉地区代码）
         const langCode = lang.split('-')[0];
 
-        // Google Translate TTS API（非官方但免费）
+        // 使用后端代理来避免CORS问题
         // 文本长度限制：每次最多200字符
         const maxLength = 200;
         const chunks = this.splitTextIntoChunks(text, maxLength);
 
+        // 获取后端API地址
+        const isDev = window.location.port === '3000';
+        const apiHost = isDev ? 'localhost:8000' : window.location.host;
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           const encodedText = encodeURIComponent(chunk);
-          const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${langCode}&q=${encodedText}`;
+          // 使用后端代理端点
+          const audioUrl = `${protocol}//${apiHost}/api/tts/proxy?text=${encodedText}&lang=${langCode}`;
 
-          await this.playAudioUrl(audioUrl);
+          try {
+            await this.playAudioUrl(audioUrl);
+          } catch (audioError) {
+            console.error('[TTS] Google TTS audio failed, falling back to Web Speech API:', audioError);
+            // 如果 Google TTS 失败，回退到 Web Speech API
+            await this.speakWithWebSpeech(chunk, lang);
+          }
         }
 
         resolve();
@@ -117,6 +129,7 @@ class TTSService {
    */
   private async playAudioUrl(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      console.log('[TTS] Loading audio from:', url);
       const audio = new Audio(url);
       this.currentAudio = audio;
 
@@ -134,6 +147,23 @@ class TTSService {
         console.warn('[TTS] setSinkId not supported or no device selected');
       }
 
+      // 添加加载进度监听
+      audio.onloadstart = () => {
+        console.log('[TTS] Audio loading started');
+      };
+
+      audio.onloadedmetadata = () => {
+        console.log('[TTS] Audio metadata loaded');
+      };
+
+      audio.onloadeddata = () => {
+        console.log('[TTS] Audio data loaded');
+      };
+
+      audio.oncanplay = () => {
+        console.log('[TTS] Audio can play');
+      };
+
       audio.oncanplaythrough = () => {
         console.log('[TTS] Audio ready, playing...');
         audio.play().catch(err => {
@@ -148,8 +178,16 @@ class TTSService {
       };
 
       audio.onerror = (err) => {
-        console.error('[TTS] Audio error:', err);
-        reject(err);
+        console.error('[TTS] Audio error event:', err);
+        console.error('[TTS] Audio error details:', {
+          error: audio.error,
+          code: audio.error?.code,
+          message: audio.error?.message,
+          networkState: audio.networkState,
+          readyState: audio.readyState,
+          src: audio.src
+        });
+        reject(new Error(`Audio load failed: ${audio.error?.message || 'Unknown error'}`));
       };
     });
   }

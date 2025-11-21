@@ -187,8 +187,44 @@ async def start_translation(
     await db.commit()
     await db.refresh(session)
 
-    # TODO: 启动翻译服务（需要实现WebSocket回调）
-    # 这里暂时返回成功，实际的翻译会通过WebSocket处理
+    # 定义文本接收回调函数
+    async def on_text_received(text: str):
+        """当收到翻译文本时的回调"""
+        # 发送到WebSocket
+        await manager.send_message(current_user.id, {
+            "type": "transcript",
+            "data": {
+                "source_text": "",  # API不提供源文本
+                "translated_text": text.strip()
+            }
+        })
+
+        # 保存到数据库（仅保存完整的句子，不保存增量）
+        if text.strip() and text.endswith("\n"):
+            transcript = Transcript(
+                session_id=session.id,
+                timestamp=datetime.utcnow(),
+                source_text=None,
+                translated_text=text.strip()
+            )
+            db.add(transcript)
+            await db.commit()
+
+    # 启动翻译服务
+    success = await translation_service.start_translation(
+        user_id=current_user.id,
+        api_key=api_key,
+        target_language=config.target_language,
+        voice=config.voice,
+        audio_enabled=config.audio_enabled,
+        on_text_callback=on_text_received
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start translation service"
+        )
 
     return {
         "status": "started",
@@ -396,6 +432,27 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+async def get_user_from_token(token: str, db: AsyncSession) -> Optional[User]:
+    """从token获取用户"""
+    try:
+        from jose import jwt, JWTError
+        from auth import SECRET_KEY, ALGORITHM
+
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            return None
+
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        return user
+    except JWTError:
+        return None
+    except Exception as e:
+        print(f"[WebSocket] Token validation error: {e}")
+        return None
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -405,28 +462,38 @@ async def websocket_endpoint(
     WebSocket端点用于实时翻译数据传输
     客户端连接时需要提供token参数
     """
-    # TODO: 实现token验证
-    # 这里简化处理，实际应该验证JWT token
-    user_id = 1  # 临时使用固定ID
+    if not token:
+        await websocket.close(code=1008, reason="Missing token")
+        return
 
-    await manager.connect(user_id, websocket)
+    # 验证token并获取用户
+    async for db in get_db():
+        user = await get_user_from_token(token, db)
+        if not user:
+            await websocket.close(code=1008, reason="Invalid token")
+            return
 
-    try:
-        while True:
-            # 接收客户端消息
-            data = await websocket.receive_text()
-            message = json.loads(data)
+        user_id = user.id
+        await manager.connect(user_id, websocket)
 
-            # 处理不同类型的消息
-            if message.get("type") == "ping":
-                await manager.send_message(user_id, {"type": "pong"})
+        try:
+            while True:
+                # 接收客户端消息
+                data = await websocket.receive_text()
+                message = json.loads(data)
 
-    except WebSocketDisconnect:
-        manager.disconnect(user_id)
-        print(f"[WebSocket] User {user_id} disconnected")
-    except Exception as e:
-        print(f"[WebSocket] Error: {e}")
-        manager.disconnect(user_id)
+                # 处理不同类型的消息
+                if message.get("type") == "ping":
+                    await manager.send_message(user_id, {"type": "pong"})
+
+        except WebSocketDisconnect:
+            manager.disconnect(user_id)
+            print(f"[WebSocket] User {user_id} disconnected")
+        except Exception as e:
+            print(f"[WebSocket] Error: {e}")
+            manager.disconnect(user_id)
+        finally:
+            break
 
 
 # ============ 健康检查 ============

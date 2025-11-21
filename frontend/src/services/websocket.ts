@@ -16,9 +16,13 @@ class WebSocketService {
       return;
     }
 
+    // 开发环境使用localhost:8000，生产环境使用当前host
+    const isDev = window.location.port === '3000';
+    const wsHost = isDev ? 'localhost:8000' : window.location.host;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`;
+    const wsUrl = `${protocol}//${wsHost}/ws?token=${token}`;
 
+    console.log(`[WS] Connecting to ${wsUrl}`);
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {

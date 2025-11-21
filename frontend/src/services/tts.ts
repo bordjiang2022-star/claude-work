@@ -7,6 +7,7 @@ class TTSService {
 
   constructor() {
     this.synthesis = window.speechSynthesis;
+    console.log('[TTS] Service initialized');
   }
 
   /**
@@ -14,6 +15,7 @@ class TTSService {
    */
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
+    console.log('[TTS] Enabled:', enabled);
     if (!enabled) {
       this.stop();
     }
@@ -23,12 +25,23 @@ class TTSService {
    * 播放文本
    */
   speak(text: string, lang: string = 'en-US') {
-    if (!this.enabled || !text.trim()) {
+    // 清理文本：去除换行符和多余空格
+    const cleanText = text.replace(/\n/g, ' ').trim();
+
+    if (!this.enabled) {
+      console.log('[TTS] Skipped (disabled):', cleanText);
       return;
     }
 
+    if (!cleanText) {
+      console.log('[TTS] Skipped (empty text)');
+      return;
+    }
+
+    console.log('[TTS] Queuing text:', cleanText, 'lang:', lang);
+
     // 添加到队列
-    this.queue.push(text.trim());
+    this.queue.push(cleanText);
 
     // 如果没有正在播放，开始播放
     if (!this.isSpeaking) {
@@ -42,11 +55,14 @@ class TTSService {
   private processQueue(lang: string) {
     if (this.queue.length === 0) {
       this.isSpeaking = false;
+      console.log('[TTS] Queue empty, stopped');
       return;
     }
 
     this.isSpeaking = true;
     const text = this.queue.shift()!;
+
+    console.log('[TTS] Speaking:', text.substring(0, 50) + '...', 'lang:', lang);
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -54,24 +70,34 @@ class TTSService {
     utterance.pitch = 1.0; // 音调
     utterance.volume = 1.0; // 音量
 
+    utterance.onstart = () => {
+      console.log('[TTS] Started speaking');
+    };
+
     utterance.onend = () => {
+      console.log('[TTS] Finished speaking');
       // 继续播放队列中的下一个
       this.processQueue(lang);
     };
 
     utterance.onerror = (event) => {
-      console.error('[TTS] Error:', event);
+      console.error('[TTS] Error:', event.error, event);
       // 出错时也要继续播放队列
       this.processQueue(lang);
     };
 
-    this.synthesis.speak(utterance);
+    // 使用setTimeout确保在用户交互后执行
+    setTimeout(() => {
+      this.synthesis.speak(utterance);
+      console.log('[TTS] Synthesis.speak() called');
+    }, 100);
   }
 
   /**
    * 停止播放
    */
   stop() {
+    console.log('[TTS] Stopping all speech');
     this.synthesis.cancel();
     this.queue = [];
     this.isSpeaking = false;
@@ -81,6 +107,7 @@ class TTSService {
    * 暂停播放
    */
   pause() {
+    console.log('[TTS] Pausing');
     this.synthesis.pause();
   }
 
@@ -88,6 +115,7 @@ class TTSService {
    * 恢复播放
    */
   resume() {
+    console.log('[TTS] Resuming');
     this.synthesis.resume();
   }
 
@@ -95,7 +123,9 @@ class TTSService {
    * 获取可用的语音列表
    */
   getVoices(): SpeechSynthesisVoice[] {
-    return this.synthesis.getVoices();
+    const voices = this.synthesis.getVoices();
+    console.log('[TTS] Available voices:', voices.length);
+    return voices;
   }
 
   /**

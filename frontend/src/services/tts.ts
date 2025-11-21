@@ -70,6 +70,16 @@ class TTSService {
     utterance.pitch = 1.0; // 音调
     utterance.volume = 1.0; // 音量
 
+    // 尝试使用本地语音（更可靠，避免在线TTS的问题）
+    const voices = this.synthesis.getVoices();
+    const localVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0]) && v.localService);
+    if (localVoice) {
+      utterance.voice = localVoice;
+      console.log('[TTS] Using LOCAL voice:', localVoice.name);
+    } else {
+      console.log('[TTS] No local voice found, using default');
+    }
+
     utterance.onstart = () => {
       console.log('[TTS] Started speaking');
     };

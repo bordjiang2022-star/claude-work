@@ -74,7 +74,7 @@ class LiveTranslateClient:
         """建立 WebSocket 连接并发送会话配置。"""
         headers = [("Authorization", f"Bearer {self.api_key}")]
         try:
-            self.ws = await connect(self.api_url, additional_headers=headers)
+            self.ws = await connect(self.api_url, extra_headers=headers)
             self.is_connected = True
             print(f"[WS] Connected: {self.api_url}")
             await self.configure_session()

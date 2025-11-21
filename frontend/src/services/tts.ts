@@ -1,13 +1,15 @@
-// Web Speech API TTS服务
+import { audioDeviceService } from './audioDevice';
+
+// TTS服务 - 使用HTMLAudioElement + setSinkId实现音频设备路由
 class TTSService {
-  private synthesis: SpeechSynthesis;
   private enabled: boolean = true;
-  private queue: string[] = [];
+  private queue: Array<{ text: string; lang: string }> = [];
   private isSpeaking: boolean = false;
+  private currentAudio: HTMLAudioElement | null = null;
+  private useGoogleTTS: boolean = true; // 使用Google TTS API代替Web Speech API
 
   constructor() {
-    this.synthesis = window.speechSynthesis;
-    console.log('[TTS] Service initialized');
+    console.log('[TTS] Service initialized with audio device routing');
   }
 
   /**
@@ -41,66 +43,161 @@ class TTSService {
     console.log('[TTS] Queuing text:', cleanText, 'lang:', lang);
 
     // 添加到队列
-    this.queue.push(cleanText);
+    this.queue.push({ text: cleanText, lang });
 
     // 如果没有正在播放，开始播放
     if (!this.isSpeaking) {
-      this.processQueue(lang);
+      this.processQueue();
     }
   }
 
   /**
    * 处理播放队列
    */
-  private processQueue(lang: string) {
+  private async processQueue() {
     if (this.queue.length === 0) {
       this.isSpeaking = false;
+      this.currentAudio = null;
       console.log('[TTS] Queue empty, stopped');
       return;
     }
 
     this.isSpeaking = true;
-    const text = this.queue.shift()!;
+    const item = this.queue.shift()!;
+    const { text, lang } = item;
 
     console.log('[TTS] Speaking:', text.substring(0, 50) + '...', 'lang:', lang);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = 1.0; // 语速
-    utterance.pitch = 1.0; // 音调
-    utterance.volume = 1.0; // 音量
-
-    // 尝试使用本地语音（更可靠，避免在线TTS的问题）
-    const voices = this.synthesis.getVoices();
-    const localVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0]) && v.localService);
-    if (localVoice) {
-      utterance.voice = localVoice;
-      console.log('[TTS] Using LOCAL voice:', localVoice.name);
-    } else {
-      console.log('[TTS] No local voice found, using default');
+    try {
+      if (this.useGoogleTTS) {
+        await this.speakWithGoogleTTS(text, lang);
+      } else {
+        await this.speakWithWebSpeech(text, lang);
+      }
+    } catch (error) {
+      console.error('[TTS] Error:', error);
     }
 
-    utterance.onstart = () => {
-      console.log('[TTS] Started speaking');
-    };
+    // 继续播放队列中的下一个
+    this.processQueue();
+  }
 
-    utterance.onend = () => {
-      console.log('[TTS] Finished speaking');
-      // 继续播放队列中的下一个
-      this.processQueue(lang);
-    };
+  /**
+   * 使用Google TTS API播放（支持setSinkId）
+   */
+  private async speakWithGoogleTTS(text: string, lang: string): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // 将语言代码转换为Google TTS格式（去掉地区代码）
+        const langCode = lang.split('-')[0];
 
-    utterance.onerror = (event) => {
-      console.error('[TTS] Error:', event.error, event);
-      // 出错时也要继续播放队列
-      this.processQueue(lang);
-    };
+        // Google Translate TTS API（非官方但免费）
+        // 文本长度限制：每次最多200字符
+        const maxLength = 200;
+        const chunks = this.splitTextIntoChunks(text, maxLength);
 
-    // 使用setTimeout确保在用户交互后执行
-    setTimeout(() => {
-      this.synthesis.speak(utterance);
-      console.log('[TTS] Synthesis.speak() called');
-    }, 100);
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const encodedText = encodeURIComponent(chunk);
+          const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${langCode}&q=${encodedText}`;
+
+          await this.playAudioUrl(audioUrl);
+        }
+
+        resolve();
+      } catch (error) {
+        console.error('[TTS] Google TTS error:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * 播放音频URL（使用指定的输出设备）
+   */
+  private async playAudioUrl(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio(url);
+      this.currentAudio = audio;
+
+      // 设置输出设备
+      const deviceId = audioDeviceService.getSelectedOutputDeviceId();
+      if (deviceId && audioDeviceService.supportsSinkId()) {
+        (audio as any).setSinkId(deviceId)
+          .then(() => {
+            console.log('[TTS] Audio output set to:', audioDeviceService.getSelectedDeviceLabel());
+          })
+          .catch((err: any) => {
+            console.warn('[TTS] Failed to set audio output device:', err);
+          });
+      } else {
+        console.warn('[TTS] setSinkId not supported or no device selected');
+      }
+
+      audio.oncanplaythrough = () => {
+        console.log('[TTS] Audio ready, playing...');
+        audio.play().catch(err => {
+          console.error('[TTS] Failed to play:', err);
+          reject(err);
+        });
+      };
+
+      audio.onended = () => {
+        console.log('[TTS] Audio finished');
+        resolve();
+      };
+
+      audio.onerror = (err) => {
+        console.error('[TTS] Audio error:', err);
+        reject(err);
+      };
+    });
+  }
+
+  /**
+   * 将长文本分割成小块
+   */
+  private splitTextIntoChunks(text: string, maxLength: number): string[] {
+    const chunks: string[] = [];
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+
+    let currentChunk = '';
+    for (const sentence of sentences) {
+      if ((currentChunk + sentence).length <= maxLength) {
+        currentChunk += sentence;
+      } else {
+        if (currentChunk) chunks.push(currentChunk.trim());
+        currentChunk = sentence;
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk.trim());
+
+    return chunks;
+  }
+
+  /**
+   * 使用Web Speech API播放（备用方案，不支持setSinkId）
+   */
+  private async speakWithWebSpeech(text: string, lang: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      utterance.onend = () => {
+        console.log('[TTS] Web Speech finished');
+        resolve();
+      };
+
+      utterance.onerror = (event) => {
+        console.error('[TTS] Web Speech error:', event.error);
+        reject(event);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    });
   }
 
   /**
@@ -108,9 +205,21 @@ class TTSService {
    */
   stop() {
     console.log('[TTS] Stopping all speech');
-    this.synthesis.cancel();
+
+    // 停止当前音频
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
+
+    // 清空队列
     this.queue = [];
     this.isSpeaking = false;
+
+    // 也停止Web Speech API（如果有在使用）
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
   }
 
   /**
@@ -118,7 +227,9 @@ class TTSService {
    */
   pause() {
     console.log('[TTS] Pausing');
-    this.synthesis.pause();
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+    }
   }
 
   /**
@@ -126,16 +237,29 @@ class TTSService {
    */
   resume() {
     console.log('[TTS] Resuming');
-    this.synthesis.resume();
+    if (this.currentAudio) {
+      this.currentAudio.play();
+    }
   }
 
   /**
-   * 获取可用的语音列表
+   * 设置是否使用Google TTS
+   */
+  setUseGoogleTTS(use: boolean) {
+    this.useGoogleTTS = use;
+    console.log('[TTS] Using Google TTS:', use);
+  }
+
+  /**
+   * 获取可用的语音列表（仅用于Web Speech API）
    */
   getVoices(): SpeechSynthesisVoice[] {
-    const voices = this.synthesis.getVoices();
-    console.log('[TTS] Available voices:', voices.length);
-    return voices;
+    if (window.speechSynthesis) {
+      const voices = window.speechSynthesis.getVoices();
+      console.log('[TTS] Available voices:', voices.length);
+      return voices;
+    }
+    return [];
   }
 
   /**

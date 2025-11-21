@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { useTranslationStore } from '@/hooks/useTranslationStore';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { AudioDeviceSelector } from '@/components/AudioDeviceSelector';
 import { TranslationControls } from '@/components/TranslationControls';
 import { TranscriptPanel } from '@/components/TranscriptPanel';
 import { Header } from '@/components/Header';
@@ -66,6 +67,9 @@ export const TranslatePage: React.FC = () => {
         {/* 语言选择和控制面板 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <LanguageSelector />
+          <div className="mt-4">
+            <AudioDeviceSelector />
+          </div>
           <div className="mt-6">
             <TranslationControls />
           </div>

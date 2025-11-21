@@ -211,12 +211,14 @@ async def start_translation(
             await db.commit()
 
     # 启动翻译服务
+    # 注意：audio_enabled设为False，因为TTS在前端浏览器播放（使用Web Speech API）
+    # 这样可以减少API成本和网络延迟
     success = await translation_service.start_translation(
         user_id=current_user.id,
         api_key=api_key,
         target_language=config.target_language,
-        voice=config.voice,
-        audio_enabled=config.audio_enabled,
+        voice=None,  # 不使用后端TTS
+        audio_enabled=False,  # 前端使用Web Speech API播放
         on_text_callback=on_text_received
     )
 

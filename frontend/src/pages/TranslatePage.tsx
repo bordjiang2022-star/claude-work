@@ -9,12 +9,13 @@ import { TranslationControls } from '@/components/TranslationControls';
 import { TranscriptPanel } from '@/components/TranscriptPanel';
 import { Header } from '@/components/Header';
 import { wsService } from '@/services/websocket';
+import { ttsService } from '@/services/tts';
 
 export const TranslatePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
-  const { addTranscript } = useTranslationStore();
+  const { addTranscript, config, isTranslating } = useTranslationStore();
 
   useEffect(() => {
     // 检查认证状态
@@ -27,11 +28,20 @@ export const TranslatePage: React.FC = () => {
     // WebSocket消息处理
     const handleMessage = (message: any) => {
       if (message.type === 'transcript') {
+        const translatedText = message.data.translated_text;
+
+        // 添加到转录列表
         addTranscript({
           timestamp: new Date().toISOString(),
           source_text: message.data.source_text,
-          translated_text: message.data.translated_text,
+          translated_text: translatedText,
         });
+
+        // 使用TTS播放翻译文本
+        if (translatedText && config.audio_enabled) {
+          const langCode = ttsService.getLanguageCode(config.target_language);
+          ttsService.speak(translatedText, langCode);
+        }
       }
     };
 
@@ -40,7 +50,14 @@ export const TranslatePage: React.FC = () => {
     return () => {
       wsService.removeMessageHandler(handleMessage);
     };
-  }, [addTranscript]);
+  }, [addTranscript, config]);
+
+  // 当翻译停止时，停止TTS
+  useEffect(() => {
+    if (!isTranslating) {
+      ttsService.stop();
+    }
+  }, [isTranslating]);
 
   if (!isAuthenticated || !user) {
     return null;

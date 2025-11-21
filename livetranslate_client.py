@@ -12,8 +12,8 @@ import contextlib
 import audioop  # Python 3.11 内置，用于重采样
 
 import pyaudio
-from websockets.asyncio.client import connect
 import websockets
+from websockets import connect
 
 
 class LiveTranslateClient:

@@ -52,13 +52,6 @@ export const TranslatePage: React.FC = () => {
     };
   }, [addTranscript, config]);
 
-  // 当翻译停止时，停止TTS
-  useEffect(() => {
-    if (!isTranslating) {
-      ttsService.stop();
-    }
-  }, [isTranslating]);
-
   if (!isAuthenticated || !user) {
     return null;
   }

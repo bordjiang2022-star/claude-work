@@ -18,6 +18,9 @@ export const TranslationControls: React.FC = () => {
 
   const handleStop = async () => {
     try {
+      // 停止TTS播放
+      ttsService.stop();
+      // 停止翻译
       await stopTranslation();
     } catch (err) {
       console.error('Failed to stop translation:', err);

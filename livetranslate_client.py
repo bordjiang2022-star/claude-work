@@ -10,6 +10,7 @@ import threading
 import traceback
 import contextlib
 import audioop  # Python 3.11 内置，用于重采样
+import inspect
 
 import pyaudio
 import websockets
@@ -170,7 +171,10 @@ class LiveTranslateClient:
                 if et == "response.audio_transcript.delta":
                     text = event.get("transcript", "")
                     if text and on_text_received:
-                        on_text_received(text)
+                        if inspect.iscoroutinefunction(on_text_received):
+                            await on_text_received(text)
+                        else:
+                            on_text_received(text)
 
                 # 增量音频（TTS）
                 elif et == "response.audio.delta" and self.audio_enabled:
@@ -183,7 +187,10 @@ class LiveTranslateClient:
                     text = event.get("transcript") or event.get("text") or ""
                     if text:
                         if on_text_received:
-                            on_text_received(text + "\n")
+                            if inspect.iscoroutinefunction(on_text_received):
+                                await on_text_received(text + "\n")
+                            else:
+                                on_text_received(text + "\n")
                         print(f"[TRANS] {text}")
 
                 elif et == "response.done":

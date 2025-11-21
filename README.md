@@ -18,7 +18,7 @@ LiveTranslate 是一个基于Web的实时语音翻译应用，支持多语言翻
 ## 🏗️ 技术架构
 
 ### 后端技术栈
-- Python 3.11+
+- Python 3.11 (推荐使用3.11.9，已充分测试)
 - FastAPI (Web框架)
 - SQLAlchemy (数据库ORM)
 - WebSocket (实时通信)
@@ -90,7 +90,7 @@ livetranslate_web/
 
 ### 前提条件
 
-1. **Python 3.11+** - [下载地址](https://www.python.org/downloads/)
+1. **Python 3.11** - [下载地址](https://www.python.org/downloads/release/python-3119/) ⚠️ **请使用3.11版本，已充分测试**
 2. **Node.js 18+** - [下载地址](https://nodejs.org/)
 3. **VB-Cable** (Windows) - [下载地址](https://vb-audio.com/Cable/)
 4. **阿里云API密钥** - [获取地址](https://dashscope.aliyun.com/)

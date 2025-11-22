@@ -1,5 +1,5 @@
 // 主翻译页面
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/hooks/useAuthStore';
@@ -10,13 +10,13 @@ import { TranslationControls } from '@/components/TranslationControls';
 import { TranscriptPanel } from '@/components/TranscriptPanel';
 import { Header } from '@/components/Header';
 import { wsService } from '@/services/websocket';
-import { ttsService } from '@/services/tts';
+// 注意：TTS 现在由后端 PyAudio 处理，不再使用前端 ttsService
 
 export const TranslatePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useAuthStore();
-  const { addTranscript, config, isTranslating } = useTranslationStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const { addTranscript } = useTranslationStore();
 
   useEffect(() => {
     // 检查认证状态
@@ -38,11 +38,12 @@ export const TranslatePage: React.FC = () => {
           translated_text: translatedText,
         });
 
-        // 使用TTS播放翻译文本
-        if (translatedText && config.audio_enabled) {
-          const langCode = ttsService.getLanguageCode(config.target_language);
-          ttsService.speak(translatedText, langCode);
-        }
+        // 注意：TTS 现在由后端 PyAudio 直接播放到扬声器
+        // 不再需要前端播放，因为：
+        // 1. 浏览器的 Web Speech API 不支持音频设备路由
+        // 2. Google TTS 有 CORS 问题且不稳定
+        // 3. 后端 PyAudio 可以直接控制输出设备
+        console.log('[Transcript] Received:', translatedText?.substring(0, 50));
       }
     };
 
@@ -51,7 +52,7 @@ export const TranslatePage: React.FC = () => {
     return () => {
       wsService.removeMessageHandler(handleMessage);
     };
-  }, [addTranscript, config]);
+  }, [addTranscript]);
 
   if (!isAuthenticated || !user) {
     return null;

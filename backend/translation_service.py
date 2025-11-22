@@ -25,6 +25,7 @@ class TranslationService:
         voice: Optional[str] = "Cherry",
         audio_enabled: bool = True,
         input_device_index: Optional[int] = None,
+        output_device_index: Optional[int] = None,
         on_text_callback: Optional[Callable] = None
     ) -> bool:
         """
@@ -36,7 +37,8 @@ class TranslationService:
             target_language: 目标语言
             voice: TTS声音
             audio_enabled: 是否启用音频
-            input_device_index: 输入设备索引
+            input_device_index: 输入设备索引（麦克风/虚拟音频）
+            output_device_index: 输出设备索引（扬声器，用于TTS播放）
             on_text_callback: 文本接收回调
 
         Returns:
@@ -54,7 +56,8 @@ class TranslationService:
                 target_language=target_language,
                 voice=voice,
                 audio_enabled=audio_enabled,
-                input_device_index=input_device_index
+                input_device_index=input_device_index,
+                output_device_index=output_device_index  # TTS 输出设备
             )
 
             # 连接到服务

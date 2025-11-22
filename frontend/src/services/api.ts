@@ -8,7 +8,8 @@ import type {
   TranslationConfig,
   TranscriptItem,
   Session,
-  Statistics
+  Statistics,
+  AudioDevicesResponse
 } from '@/types';
 
 class ApiService {
@@ -122,6 +123,12 @@ class ApiService {
   // 统计API
   async getStatistics(): Promise<Statistics> {
     const response = await this.api.get<Statistics>('/statistics');
+    return response.data;
+  }
+
+  // 音频设备API
+  async getAudioDevices(): Promise<AudioDevicesResponse> {
+    const response = await this.api.get<AudioDevicesResponse>('/audio/devices');
     return response.data;
   }
 }

@@ -26,6 +26,19 @@ export interface TranslationConfig {
   target_language: string;
   voice?: string;
   audio_enabled: boolean;
+  input_device_index?: number;  // 输入设备（麦克风/虚拟音频线缆）
+  output_device_index?: number; // 输出设备（扬声器，用于TTS播放）
+}
+
+export interface AudioDevice {
+  index: number;
+  name: string;
+  sample_rate: number;
+}
+
+export interface AudioDevicesResponse {
+  input_devices: AudioDevice[];
+  output_devices: AudioDevice[];
 }
 
 export interface TranscriptItem {

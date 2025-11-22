@@ -33,6 +33,7 @@ class LiveTranslateClient:
         *,
         audio_enabled: bool = True,
         input_device_index: int | None = None,
+        output_device_index: int | None = None,  # TTS 输出设备索引
     ):
         if not api_key:
             raise ValueError("API key cannot be empty.")
@@ -42,6 +43,7 @@ class LiveTranslateClient:
         self.target_language = target_language
         self.audio_enabled = audio_enabled
         self.voice = voice if audio_enabled else "Cherry"
+        self.output_device_index = output_device_index  # TTS 输出设备
 
         # Realtime WS endpoint
         self.api_url = (
@@ -118,14 +120,33 @@ class LiveTranslateClient:
 
     def _audio_player_task(self):
         # 独立线程播放返回的 TTS
-        with contextlib.suppress(Exception):
-            stream = self.pyaudio_instance.open(
-                format=self.output_format,
-                channels=self.output_channels,
-                rate=self.output_rate,
-                output=True,
-                frames_per_buffer=self.output_chunk,
-            )
+        # 支持指定输出设备（扬声器）
+        stream = None
+        try:
+            open_kwargs = {
+                "format": self.output_format,
+                "channels": self.output_channels,
+                "rate": self.output_rate,
+                "output": True,
+                "frames_per_buffer": self.output_chunk,
+            }
+            # 如果指定了输出设备，使用它
+            if self.output_device_index is not None:
+                open_kwargs["output_device_index"] = self.output_device_index
+                dev_info = self.pyaudio_instance.get_device_info_by_index(self.output_device_index)
+                print(f"[TTS] Using output device: {dev_info.get('name', 'Unknown')} (index={self.output_device_index})")
+            else:
+                print("[TTS] Using default output device")
+
+            stream = self.pyaudio_instance.open(**open_kwargs)
+        except Exception as e:
+            print(f"[TTS] Failed to open output stream: {e}")
+            return  # 无法打开流，退出
+
+        if stream is None:
+            print("[TTS] Stream is None, cannot play audio")
+            return
+
         try:
             while self.is_connected or not self.audio_playback_queue.empty():
                 try:
@@ -134,13 +155,16 @@ class LiveTranslateClient:
                     continue
                 if chunk is None:
                     break
-                with contextlib.suppress(Exception):
+                try:
                     stream.write(chunk)
+                except Exception as write_err:
+                    print(f"[TTS] Error writing audio: {write_err}")
                 self.audio_playback_queue.task_done()
         finally:
             with contextlib.suppress(Exception):
                 stream.stop_stream()
                 stream.close()
+            print("[TTS] Audio player stopped")
 
     def start_audio_player(self):
         if not self.audio_enabled:

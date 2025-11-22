@@ -58,6 +58,8 @@ class TranslationConfig(BaseModel):
     target_language: str
     voice: Optional[str] = "Cherry"
     audio_enabled: bool = True
+    input_device_index: Optional[int] = None  # 输入设备（麦克风/虚拟音频线缆）
+    output_device_index: Optional[int] = None  # 输出设备（扬声器，用于TTS播放）
 
 
 class TranscriptResponse(BaseModel):
@@ -212,14 +214,20 @@ async def start_translation(
             await db.commit()
 
     # 启动翻译服务
-    # 注意：audio_enabled设为False，因为TTS在前端浏览器播放（使用Web Speech API）
-    # 这样可以减少API成本和网络延迟
+    # 重要：必须启用 audio_enabled=True，让阿里云 API 返回 TTS 音频
+    # 然后由 livetranslate_client.py 的 PyAudio 直接播放到扬声器
+    # 这是唯一可靠的方式，因为：
+    # 1. 浏览器的 Web Speech API 不支持音频设备路由
+    # 2. Google TTS 有 CORS 问题且不稳定
+    # 3. PyAudio 可以直接控制输出设备
     success = await translation_service.start_translation(
         user_id=current_user.id,
         api_key=api_key,
         target_language=config.target_language,
-        voice=None,  # 不使用后端TTS
-        audio_enabled=False,  # 前端使用Web Speech API播放
+        voice=config.voice or "Cherry",  # 使用阿里云 TTS 语音
+        audio_enabled=config.audio_enabled,  # 使用前端配置（默认为True）
+        input_device_index=config.input_device_index,  # 输入设备（虚拟音频线缆）
+        output_device_index=config.output_device_index,  # TTS 输出设备（扬声器）
         on_text_callback=on_text_received
     )
 
@@ -600,6 +608,40 @@ async def tts_proxy(text: str, lang: str = "en"):
     except Exception as e:
         print(f"[TTS Proxy] Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+# ============ 音频设备端点 ============
+
+@app.get("/api/audio/devices")
+async def get_audio_devices(current_user: User = Depends(get_current_user)):
+    """
+    获取可用的音频设备列表
+    返回输入设备（麦克风）和输出设备（扬声器）
+    """
+    devices = audio_controller.get_audio_devices()
+
+    input_devices = [
+        {
+            "index": d["index"],
+            "name": d["name"],
+            "sample_rate": d["default_sample_rate"]
+        }
+        for d in devices if d["max_input_channels"] > 0
+    ]
+
+    output_devices = [
+        {
+            "index": d["index"],
+            "name": d["name"],
+            "sample_rate": d["default_sample_rate"]
+        }
+        for d in devices if d["max_output_channels"] > 0
+    ]
+
+    return {
+        "input_devices": input_devices,
+        "output_devices": output_devices
+    }
 
 
 # ============ 健康检查 ============

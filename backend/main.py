@@ -216,10 +216,13 @@ async def start_translation(
     # 启动翻译服务
     # 重要：必须启用 audio_enabled=True，让阿里云 API 返回 TTS 音频
     # 然后由 livetranslate_client.py 的 PyAudio 直接播放到扬声器
-    # 这是唯一可靠的方式，因为：
-    # 1. 浏览器的 Web Speech API 不支持音频设备路由
-    # 2. Google TTS 有 CORS 问题且不稳定
-    # 3. PyAudio 可以直接控制输出设备
+    print(f"[API] Starting translation with config:")
+    print(f"[API]   target_language: {config.target_language}")
+    print(f"[API]   voice: {config.voice}")
+    print(f"[API]   audio_enabled: {config.audio_enabled}")
+    print(f"[API]   input_device_index: {config.input_device_index}")
+    print(f"[API]   output_device_index: {config.output_device_index}")
+
     success = await translation_service.start_translation(
         user_id=current_user.id,
         api_key=api_key,

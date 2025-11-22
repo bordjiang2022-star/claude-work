@@ -147,7 +147,11 @@ class LiveTranslateClient:
                 print(f"[TTS] Using output device: {dev_info.get('name', 'Unknown')} (index={self.output_device_index})")
                 print(f"[TTS] Device native rate: {dev_rate}Hz, TTS rate: {self.output_rate}Hz")
             else:
-                print("[TTS] Using default output device")
+                # 获取系统默认输出设备的信息
+                default_out = self.pyaudio_instance.get_default_output_device_info()
+                dev_rate = int(default_out.get('defaultSampleRate', 44100))
+                print(f"[TTS] Using DEFAULT output device: {default_out.get('name', 'Unknown')}")
+                print(f"[TTS] Default device native rate: {dev_rate}Hz, TTS rate: {self.output_rate}Hz")
 
             # 尝试使用 TTS 原始采样率 24kHz
             open_kwargs = {

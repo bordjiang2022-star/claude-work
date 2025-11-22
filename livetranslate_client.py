@@ -122,7 +122,21 @@ class LiveTranslateClient:
         # 独立线程播放返回的 TTS
         # 支持指定输出设备（扬声器）
         stream = None
+        actual_rate = self.output_rate  # TTS 输出采样率 24kHz
+        need_resample = False
+
         try:
+            # 获取设备支持的采样率
+            dev_rate = self.output_rate
+            if self.output_device_index is not None:
+                dev_info = self.pyaudio_instance.get_device_info_by_index(self.output_device_index)
+                dev_rate = int(dev_info.get('defaultSampleRate', 44100))
+                print(f"[TTS] Using output device: {dev_info.get('name', 'Unknown')} (index={self.output_device_index})")
+                print(f"[TTS] Device native rate: {dev_rate}Hz, TTS rate: {self.output_rate}Hz")
+            else:
+                print("[TTS] Using default output device")
+
+            # 尝试使用 TTS 原始采样率 24kHz
             open_kwargs = {
                 "format": self.output_format,
                 "channels": self.output_channels,
@@ -130,15 +144,23 @@ class LiveTranslateClient:
                 "output": True,
                 "frames_per_buffer": self.output_chunk,
             }
-            # 如果指定了输出设备，使用它
             if self.output_device_index is not None:
                 open_kwargs["output_device_index"] = self.output_device_index
-                dev_info = self.pyaudio_instance.get_device_info_by_index(self.output_device_index)
-                print(f"[TTS] Using output device: {dev_info.get('name', 'Unknown')} (index={self.output_device_index})")
-            else:
-                print("[TTS] Using default output device")
 
-            stream = self.pyaudio_instance.open(**open_kwargs)
+            try:
+                stream = self.pyaudio_instance.open(**open_kwargs)
+                actual_rate = self.output_rate
+                print(f"[TTS] Opened stream at {actual_rate}Hz directly")
+            except Exception as rate_err:
+                # 24kHz 不支持，使用设备原生采样率并重采样
+                print(f"[TTS] {self.output_rate}Hz not supported, falling back to {dev_rate}Hz with resampling")
+                open_kwargs["rate"] = dev_rate
+                open_kwargs["frames_per_buffer"] = int(self.output_chunk * dev_rate // self.output_rate)
+                stream = self.pyaudio_instance.open(**open_kwargs)
+                actual_rate = dev_rate
+                need_resample = True
+                print(f"[TTS] Opened stream at {actual_rate}Hz (will resample from {self.output_rate}Hz)")
+
         except Exception as e:
             print(f"[TTS] Failed to open output stream: {e}")
             return  # 无法打开流，退出
@@ -148,6 +170,7 @@ class LiveTranslateClient:
             return
 
         try:
+            resample_state = None
             while self.is_connected or not self.audio_playback_queue.empty():
                 try:
                     chunk = self.audio_playback_queue.get(timeout=0.1)
@@ -156,6 +179,11 @@ class LiveTranslateClient:
                 if chunk is None:
                     break
                 try:
+                    # 如果需要重采样（从 24kHz 到设备采样率）
+                    if need_resample and actual_rate != self.output_rate:
+                        chunk, resample_state = audioop.ratecv(
+                            chunk, 2, 1, self.output_rate, actual_rate, resample_state
+                        )
                     stream.write(chunk)
                 except Exception as write_err:
                     print(f"[TTS] Error writing audio: {write_err}")

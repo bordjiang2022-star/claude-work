@@ -510,40 +510,95 @@ async def tts_proxy(text: str, lang: str = "en"):
         text: 要转换为语音的文本
         lang: 语言代码（如 en, zh, ja）
     """
+    print(f"[TTS Proxy] Request received - text: '{text[:50]}...' lang: {lang}")
+
     try:
-        # Google Translate TTS API
-        encoded_text = httpx.QueryParams({"q": text})
-        url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl={lang}&{encoded_text}"
+        # 尝试多个 Google TTS URL 格式
+        urls_to_try = [
+            # 格式1: translate_tts with gtx client (最常用)
+            f"https://translate.google.com/translate_tts?ie=UTF-8&client=gtx&tl={lang}&q={httpx.QueryParams({'q': text})['q']}",
+            # 格式2: 使用 tw-ob client
+            f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl={lang}&q={httpx.QueryParams({'q': text})['q']}",
+        ]
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                },
-                timeout=10.0
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            last_error = None
+            for i, url in enumerate(urls_to_try):
+                try:
+                    print(f"[TTS Proxy] Trying URL format {i+1}: {url[:100]}...")
+                    response = await client.get(
+                        url,
+                        headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                            "Accept": "audio/mpeg, audio/*;q=0.9, */*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Referer": "https://translate.google.com/",
+                        },
+                        timeout=15.0
+                    )
+
+                    print(f"[TTS Proxy] Response status: {response.status_code}")
+                    print(f"[TTS Proxy] Content-Type: {response.headers.get('content-type', 'unknown')}")
+                    print(f"[TTS Proxy] Content-Length: {len(response.content)} bytes")
+
+                    # 检查响应
+                    content_type = response.headers.get('content-type', '')
+
+                    if response.status_code != 200:
+                        print(f"[TTS Proxy] Error response: {response.text[:200] if response.text else 'empty'}")
+                        last_error = f"Status {response.status_code}"
+                        continue
+
+                    # 检查是否是音频内容
+                    if 'audio' not in content_type and len(response.content) < 1000:
+                        print(f"[TTS Proxy] Non-audio response: {response.content[:200]}")
+                        last_error = f"Non-audio content: {content_type}"
+                        continue
+
+                    # 检查音频文件头 (MP3 starts with ID3 or 0xFF 0xFB)
+                    if len(response.content) > 3:
+                        header = response.content[:3]
+                        is_mp3 = header == b'ID3' or (header[0] == 0xFF and (header[1] & 0xE0) == 0xE0)
+                        print(f"[TTS Proxy] Audio header check - is_mp3: {is_mp3}, header: {header.hex()}")
+
+                        if not is_mp3:
+                            print(f"[TTS Proxy] Invalid audio format, content preview: {response.content[:100]}")
+                            last_error = "Invalid audio format"
+                            continue
+
+                    print(f"[TTS Proxy] Success! Returning {len(response.content)} bytes of audio")
+
+                    # 返回音频数据
+                    return Response(
+                        content=response.content,
+                        media_type="audio/mpeg",
+                        headers={
+                            "Cache-Control": "public, max-age=3600",
+                            "Access-Control-Allow-Origin": "*",
+                            "Content-Length": str(len(response.content))
+                        }
+                    )
+
+                except httpx.TimeoutException as e:
+                    print(f"[TTS Proxy] Timeout on URL format {i+1}")
+                    last_error = f"Timeout: {str(e)}"
+                    continue
+                except Exception as e:
+                    print(f"[TTS Proxy] Error on URL format {i+1}: {e}")
+                    last_error = str(e)
+                    continue
+
+            # 所有格式都失败了
+            print(f"[TTS Proxy] All URL formats failed. Last error: {last_error}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"All Google TTS formats failed: {last_error}"
             )
 
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Google TTS API returned status {response.status_code}"
-                )
-
-            # 返回音频数据
-            return Response(
-                content=response.content,
-                media_type="audio/mpeg",
-                headers={
-                    "Cache-Control": "public, max-age=3600",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            )
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="TTS request timeout")
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=502, detail=f"TTS request failed: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"[TTS Proxy] Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 

@@ -6,10 +6,27 @@ class TTSService {
   private queue: Array<{ text: string; lang: string }> = [];
   private isSpeaking: boolean = false;
   private currentAudio: HTMLAudioElement | null = null;
-  private useGoogleTTS: boolean = true; // 使用Google TTS API代替Web Speech API
+  private useGoogleTTS: boolean = false; // 默认使用 Web Speech API（更稳定）
+  private selectedVoice: SpeechSynthesisVoice | null = null;
 
   constructor() {
-    console.log('[TTS] Service initialized with audio device routing');
+    console.log('[TTS] Service initialized with Web Speech API');
+    // 预加载语音列表
+    this.loadVoices();
+    // 有些浏览器需要等待 voiceschanged 事件
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        this.loadVoices();
+      };
+    }
+  }
+
+  /**
+   * 加载可用的语音
+   */
+  private loadVoices() {
+    const voices = window.speechSynthesis?.getVoices() || [];
+    console.log('[TTS] Loaded', voices.length, 'voices');
   }
 
   /**
@@ -214,15 +231,27 @@ class TTSService {
   }
 
   /**
-   * 使用Web Speech API播放（备用方案，不支持setSinkId）
+   * 使用Web Speech API播放
    */
   private async speakWithWebSpeech(text: string, lang: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      // 确保语音已加载
+      const voices = window.speechSynthesis?.getVoices() || [];
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang;
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
+
+      // 选择合适的语音
+      const voice = this.findBestVoice(lang, voices);
+      if (voice) {
+        utterance.voice = voice;
+        console.log('[TTS] Using voice:', voice.name, voice.lang);
+      } else {
+        console.log('[TTS] No matching voice found for', lang, '- using default');
+      }
 
       utterance.onend = () => {
         console.log('[TTS] Web Speech finished');
@@ -230,12 +259,53 @@ class TTSService {
       };
 
       utterance.onerror = (event) => {
-        console.error('[TTS] Web Speech error:', event.error);
-        reject(event);
+        // 'interrupted' 错误通常是正常的（用户停止或新语音打断）
+        if (event.error === 'interrupted') {
+          console.log('[TTS] Web Speech interrupted (normal)');
+          resolve();
+        } else {
+          console.error('[TTS] Web Speech error:', event.error);
+          reject(event);
+        }
       };
 
-      window.speechSynthesis.speak(utterance);
+      // 取消之前可能卡住的语音
+      window.speechSynthesis.cancel();
+
+      // 短延迟后开始播放（修复某些浏览器的问题）
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 50);
     });
+  }
+
+  /**
+   * 根据语言查找最佳语音
+   */
+  private findBestVoice(lang: string, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+    if (voices.length === 0) return null;
+
+    const langLower = lang.toLowerCase();
+    const langPrefix = langLower.split('-')[0];
+
+    // 优先查找完全匹配的语音
+    let voice = voices.find(v => v.lang.toLowerCase() === langLower);
+    if (voice) return voice;
+
+    // 查找语言前缀匹配的语音
+    voice = voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
+    if (voice) return voice;
+
+    // 对于英语，优先选择 Google 或 Microsoft 的语音
+    if (langPrefix === 'en') {
+      voice = voices.find(v =>
+        v.lang.toLowerCase().startsWith('en') &&
+        (v.name.includes('Google') || v.name.includes('Microsoft'))
+      );
+      if (voice) return voice;
+    }
+
+    return null;
   }
 
   /**

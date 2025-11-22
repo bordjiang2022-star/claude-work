@@ -50,6 +50,14 @@ class TranslationService:
             return False
 
         try:
+            # 打印配置信息用于调试
+            print(f"[TransService] Starting with config:")
+            print(f"  - target_language: {target_language}")
+            print(f"  - voice: {voice}")
+            print(f"  - audio_enabled: {audio_enabled}")
+            print(f"  - input_device_index: {input_device_index}")
+            print(f"  - output_device_index: {output_device_index}")
+
             # 创建客户端
             client = LiveTranslateClient(
                 api_key=api_key,

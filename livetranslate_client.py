@@ -121,6 +121,9 @@ class LiveTranslateClient:
     def _audio_player_task(self):
         # 独立线程播放返回的 TTS
         # 支持指定输出设备（扬声器）
+        print(f"[TTS] Audio player task STARTED")
+        print(f"[TTS] audio_enabled={self.audio_enabled}, output_device_index={self.output_device_index}")
+
         stream = None
         actual_rate = self.output_rate  # TTS 输出采样率 24kHz
         need_resample = False
@@ -171,12 +174,15 @@ class LiveTranslateClient:
 
         try:
             resample_state = None
+            chunks_played = 0
+            print(f"[TTS] Starting playback loop, is_connected={self.is_connected}")
             while self.is_connected or not self.audio_playback_queue.empty():
                 try:
                     chunk = self.audio_playback_queue.get(timeout=0.1)
                 except queue.Empty:
                     continue
                 if chunk is None:
+                    print("[TTS] Received stop signal")
                     break
                 try:
                     # 如果需要重采样（从 24kHz 到设备采样率）
@@ -185,9 +191,13 @@ class LiveTranslateClient:
                             chunk, 2, 1, self.output_rate, actual_rate, resample_state
                         )
                     stream.write(chunk)
+                    chunks_played += 1
+                    if chunks_played % 50 == 0:
+                        print(f"[TTS] Played {chunks_played} chunks")
                 except Exception as write_err:
                     print(f"[TTS] Error writing audio: {write_err}")
                 self.audio_playback_queue.task_done()
+            print(f"[TTS] Playback loop ended, total chunks played: {chunks_played}")
         finally:
             with contextlib.suppress(Exception):
                 stream.stop_stream()
@@ -195,13 +205,19 @@ class LiveTranslateClient:
             print("[TTS] Audio player stopped")
 
     def start_audio_player(self):
+        print(f"[TTS] start_audio_player called, audio_enabled={self.audio_enabled}")
         if not self.audio_enabled:
+            print("[TTS] Audio disabled, skipping player start")
             return
         if self.audio_player_thread is None or not self.audio_player_thread.is_alive():
+            print("[TTS] Creating and starting audio player thread")
             self.audio_player_thread = threading.Thread(
                 target=self._audio_player_task, daemon=True
             )
             self.audio_player_thread.start()
+            print("[TTS] Audio player thread started")
+        else:
+            print("[TTS] Audio player thread already running")
 
     # --------------------- Receive ---------------------
 
@@ -232,7 +248,10 @@ class LiveTranslateClient:
                 elif et == "response.audio.delta" and self.audio_enabled:
                     b64 = event.get("delta")
                     if b64:
-                        self.audio_playback_queue.put(base64.b64decode(b64))
+                        audio_data = base64.b64decode(b64)
+                        queue_size = self.audio_playback_queue.qsize()
+                        print(f"[TTS] Received audio delta: {len(audio_data)} bytes, queue size: {queue_size}")
+                        self.audio_playback_queue.put(audio_data)
 
                 # 句子完成 —— 也回调（关键：驱动前端显示）
                 elif et in ("response.audio_transcript.done", "response.text.done"):

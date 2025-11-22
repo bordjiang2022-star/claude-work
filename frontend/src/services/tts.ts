@@ -6,12 +6,14 @@ class TTSService {
   private queue: Array<{ text: string; lang: string }> = [];
   private isSpeaking: boolean = false;
   private currentAudio: HTMLAudioElement | null = null;
-  private useGoogleTTS: boolean = false; // 默认使用 Web Speech API（更稳定）
+  // 重要：必须使用 Google TTS + Audio Element 才能支持 setSinkId 音频设备路由
+  // Web Speech API 不支持 setSinkId，只能输出到系统默认设备
+  private useGoogleTTS: boolean = true; // 默认使用 Google TTS（支持设备路由）
   private selectedVoice: SpeechSynthesisVoice | null = null;
 
   constructor() {
-    console.log('[TTS] Service initialized with Web Speech API');
-    // 预加载语音列表
+    console.log('[TTS] Service initialized with Google TTS (supports setSinkId)');
+    // 预加载语音列表（用于备用方案）
     this.loadVoices();
     // 有些浏览器需要等待 voiceschanged 事件
     if (window.speechSynthesis) {
@@ -83,12 +85,15 @@ class TTSService {
     const item = this.queue.shift()!;
     const { text, lang } = item;
 
+    const method = this.useGoogleTTS ? 'Google TTS (Audio Element + setSinkId)' : 'Web Speech API (no device routing)';
     console.log('[TTS] Speaking:', text.substring(0, 50) + '...', 'lang:', lang);
+    console.log('[TTS] Method:', method);
 
     try {
       if (this.useGoogleTTS) {
         await this.speakWithGoogleTTS(text, lang);
       } else {
+        console.warn('[TTS] WARNING: Using Web Speech API - audio device routing NOT supported!');
         await this.speakWithWebSpeech(text, lang);
       }
     } catch (error) {
@@ -127,8 +132,11 @@ class TTSService {
           try {
             await this.playAudioUrl(audioUrl);
           } catch (audioError) {
-            console.error('[TTS] Google TTS audio failed, falling back to Web Speech API:', audioError);
-            // 如果 Google TTS 失败，回退到 Web Speech API
+            console.error('[TTS] Google TTS audio failed:', audioError);
+            console.warn('[TTS] WARNING: Falling back to Web Speech API');
+            console.warn('[TTS] WARNING: Web Speech API does NOT support device routing!');
+            console.warn('[TTS] WARNING: Audio will output to system default device, not selected speaker!');
+            // 如果 Google TTS 失败，回退到 Web Speech API（但不支持设备路由）
             await this.speakWithWebSpeech(chunk, lang);
           }
         }
@@ -143,26 +151,33 @@ class TTSService {
 
   /**
    * 播放音频URL（使用指定的输出设备）
+   * 重要：必须先设置 sinkId 再播放，否则会输出到默认设备
    */
   private async playAudioUrl(url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       console.log('[TTS] Loading audio from:', url);
-      const audio = new Audio(url);
+      const audio = new Audio();
       this.currentAudio = audio;
 
-      // 设置输出设备
+      // 重要：先设置输出设备，再加载音频
       const deviceId = audioDeviceService.getSelectedOutputDeviceId();
+      const deviceLabel = audioDeviceService.getSelectedDeviceLabel();
+
       if (deviceId && audioDeviceService.supportsSinkId()) {
-        (audio as any).setSinkId(deviceId)
-          .then(() => {
-            console.log('[TTS] Audio output set to:', audioDeviceService.getSelectedDeviceLabel());
-          })
-          .catch((err: any) => {
-            console.warn('[TTS] Failed to set audio output device:', err);
-          });
+        try {
+          await (audio as any).setSinkId(deviceId);
+          console.log('[TTS] Audio output device SET to:', deviceLabel, '(deviceId:', deviceId, ')');
+        } catch (err: any) {
+          console.error('[TTS] FAILED to set audio output device:', err);
+          console.error('[TTS] This means audio will go to system default device!');
+        }
       } else {
         console.warn('[TTS] setSinkId not supported or no device selected');
+        console.warn('[TTS] Audio will output to system default device');
       }
+
+      // 设置音频源（在设置 sinkId 之后）
+      audio.src = url;
 
       // 添加加载进度监听
       audio.onloadstart = () => {
@@ -170,7 +185,7 @@ class TTSService {
       };
 
       audio.onloadedmetadata = () => {
-        console.log('[TTS] Audio metadata loaded');
+        console.log('[TTS] Audio metadata loaded, duration:', audio.duration);
       };
 
       audio.onloadeddata = () => {
@@ -182,7 +197,7 @@ class TTSService {
       };
 
       audio.oncanplaythrough = () => {
-        console.log('[TTS] Audio ready, playing...');
+        console.log('[TTS] Audio ready, playing to device:', deviceLabel || 'default');
         audio.play().catch(err => {
           console.error('[TTS] Failed to play:', err);
           reject(err);
@@ -190,7 +205,7 @@ class TTSService {
       };
 
       audio.onended = () => {
-        console.log('[TTS] Audio finished');
+        console.log('[TTS] Audio finished playing');
         resolve();
       };
 
@@ -202,7 +217,7 @@ class TTSService {
           message: audio.error?.message,
           networkState: audio.networkState,
           readyState: audio.readyState,
-          src: audio.src
+          src: audio.src?.substring(0, 100)
         });
         reject(new Error(`Audio load failed: ${audio.error?.message || 'Unknown error'}`));
       };

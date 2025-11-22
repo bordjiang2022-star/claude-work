@@ -19,9 +19,9 @@ import websockets
 class LiveTranslateClient:
     """
     连接通义 Qwen 实时同传（qwen3-livetranslate-flash-realtime）的轻量客户端。
-    - 支持从指定输入设备采集音频，必要时重采样为 16k PCM16。
-    - 可选播放返回的 TTS。
-    - 通过 on_text_received 回调向上层抛出“增量/结句”文本。
+    - 从指定输入设备采集音频（必要时重采样为16k PCM16）；
+    - 可选播放返回的TTS到“指定输出设备”（避免走虚拟线）；
+    - 通过回调抛出增量文本和结句文本。
     """
 
     def __init__(
@@ -32,6 +32,7 @@ class LiveTranslateClient:
         *,
         audio_enabled: bool = True,
         input_device_index: int | None = None,
+        output_device_index: int | None = None,   # ★新增：明确指定TTS播放设备
     ):
         if not api_key:
             raise ValueError("API key cannot be empty.")
@@ -66,7 +67,9 @@ class LiveTranslateClient:
         self.pyaudio_instance = pyaudio.PyAudio()
         self.audio_playback_queue: "queue.Queue[bytes | None]" = queue.Queue()
         self.audio_player_thread: threading.Thread | None = None
+
         self.input_device_index = input_device_index
+        self.output_device_index = output_device_index  # ★保存外放设备索引
 
     # --------------------- Connection ---------------------
 
@@ -116,13 +119,14 @@ class LiveTranslateClient:
     # --------------------- Audio Out (TTS) ---------------------
 
     def _audio_player_task(self):
-        # 独立线程播放返回的 TTS
+        # 独立线程播放返回的 TTS，定向到“真实扬声器/耳机”
         with contextlib.suppress(Exception):
             stream = self.pyaudio_instance.open(
                 format=self.output_format,
                 channels=self.output_channels,
                 rate=self.output_rate,
                 output=True,
+                output_device_index=self.output_device_index,  # ★关键：定向到实体外放
                 frames_per_buffer=self.output_chunk,
             )
         try:
@@ -152,10 +156,11 @@ class LiveTranslateClient:
 
     # --------------------- Receive ---------------------
 
-    async def handle_server_messages(self, on_text_received=None):
+    async def handle_server_messages(self, on_text_delta=None, on_text_done=None):
         """
         读取服务端事件：文本增量/音频增量/完成通知等。
-        把“句子完成”事件也通过回调抛给上层，从而让前端显示文本。
+        on_text_delta: 增量（适合实时刷UI）
+        on_text_done : 结句（适合断行/下载脚本）
         """
         try:
             async for message in self.ws:
@@ -166,11 +171,11 @@ class LiveTranslateClient:
                     print(f"[WS][ERROR EVT] {message}")
                     continue
 
-                # 增量文本 —— 直接回调
+                # 增量文本 —— 翻译文本的逐字/逐短语
                 if et == "response.audio_transcript.delta":
                     text = event.get("transcript", "")
-                    if text and on_text_received:
-                        on_text_received(text)
+                    if text and on_text_delta:
+                        on_text_delta(text)
 
                 # 增量音频（TTS）
                 elif et == "response.audio.delta" and self.audio_enabled:
@@ -178,12 +183,12 @@ class LiveTranslateClient:
                     if b64:
                         self.audio_playback_queue.put(base64.b64decode(b64))
 
-                # 句子完成 —— 也回调（关键：驱动前端显示）
+                # 句子完成
                 elif et in ("response.audio_transcript.done", "response.text.done"):
                     text = event.get("transcript") or event.get("text") or ""
                     if text:
-                        if on_text_received:
-                            on_text_received(text + "\n")
+                        if on_text_done:
+                            on_text_done(text)
                         print(f"[TRANS] {text}")
 
                 elif et == "response.done":
@@ -204,9 +209,8 @@ class LiveTranslateClient:
     async def start_microphone_streaming(self):
         """
         从指定输入设备采集并推流：
-        - 设备采样率可能是 44100/48000，统一重采样为 16000 再发送。
+        - 设备采样率可能是44100/48000，统一重采样为16k再发送。
         """
-        # 计算设备参数（如果用户指定了 input_device_index，就用它）
         dev_index = self.input_device_index
         dev_rate = None
 
@@ -215,7 +219,6 @@ class LiveTranslateClient:
                 info = self.pyaudio_instance.get_device_info_by_index(dev_index)
                 dev_rate = int(info.get("defaultSampleRate", 44100))
 
-        # 未指定或获取失败时，PyAudio 会用系统默认输入
         if not dev_rate:
             dev_rate = 44100
 
@@ -235,7 +238,6 @@ class LiveTranslateClient:
             loop = asyncio.get_event_loop()
             while self.is_connected:
                 raw = await loop.run_in_executor(None, stream.read, frames_per_buffer_dev)
-                # 重采样到 16k
                 if dev_rate != self.input_rate:
                     raw, _ = audioop.ratecv(raw, 2, 1, dev_rate, self.input_rate, None)
                 await self.send_audio_chunk(raw)

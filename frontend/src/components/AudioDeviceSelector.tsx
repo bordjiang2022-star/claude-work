@@ -64,16 +64,28 @@ export const AudioDeviceSelector: React.FC = () => {
     }
   };
 
-  const handleInputDeviceChange = (index: number) => {
+  const handleInputDeviceChange = (value: string) => {
+    if (value === '') {
+      setConfig({ input_device_index: undefined });
+      console.log('[AudioDevice] Input device cleared');
+      return;
+    }
+    const index = Number(value);
     setConfig({ input_device_index: index });
     const device = inputDevices.find(d => d.index === index);
-    console.log('[AudioDevice] Input device changed to:', device?.name);
+    console.log('[AudioDevice] Input device changed to:', device?.name, 'index:', index);
   };
 
-  const handleOutputDeviceChange = (index: number) => {
+  const handleOutputDeviceChange = (value: string) => {
+    if (value === '') {
+      setConfig({ output_device_index: undefined });
+      console.log('[AudioDevice] Output device cleared');
+      return;
+    }
+    const index = Number(value);
     setConfig({ output_device_index: index });
     const device = outputDevices.find(d => d.index === index);
-    console.log('[AudioDevice] Output device changed to:', device?.name);
+    console.log('[AudioDevice] Output device changed to:', device?.name, 'index:', index);
   };
 
   if (error) {
@@ -107,7 +119,7 @@ export const AudioDeviceSelector: React.FC = () => {
         </label>
         <select
           value={config.input_device_index ?? ''}
-          onChange={(e) => handleInputDeviceChange(Number(e.target.value))}
+          onChange={(e) => handleInputDeviceChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
         >
           <option value="">-- Select Input Device --</option>
@@ -129,7 +141,7 @@ export const AudioDeviceSelector: React.FC = () => {
         </label>
         <select
           value={config.output_device_index ?? ''}
-          onChange={(e) => handleOutputDeviceChange(Number(e.target.value))}
+          onChange={(e) => handleOutputDeviceChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">-- Select Output Device --</option>

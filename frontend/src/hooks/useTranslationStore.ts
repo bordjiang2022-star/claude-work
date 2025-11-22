@@ -39,7 +39,10 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   startTranslation: async () => {
     set({ error: null });
     try {
-      const response = await apiService.startTranslation(get().config);
+      const config = get().config;
+      console.log('[Translation] Starting with config:', JSON.stringify(config, null, 2));
+      const response = await apiService.startTranslation(config);
+      console.log('[Translation] Started successfully, session_id:', response.session_id);
       set({
         isTranslating: true,
         currentSessionId: response.session_id,

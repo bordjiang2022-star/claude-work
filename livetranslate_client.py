@@ -17,12 +17,20 @@ import websockets
 from websockets import connect
 
 # Windows TTS 支持（可选）
+PYTTSX3_AVAILABLE = False
+pyttsx3 = None
 try:
-    import pyttsx3
+    import pyttsx3 as _pyttsx3
+    # 尝试初始化以验证真正可用（Windows COM 组件可能导入成功但初始化失败）
+    _test_engine = _pyttsx3.init()
+    _test_engine.stop()
+    pyttsx3 = _pyttsx3
     PYTTSX3_AVAILABLE = True
-except ImportError:
-    PYTTSX3_AVAILABLE = False
-    print("[TTS] pyttsx3 not installed, Windows TTS will not be available")
+    print("[TTS] pyttsx3 initialized successfully, Windows TTS available")
+except ImportError as e:
+    print(f"[TTS] pyttsx3 not installed: {e}")
+except Exception as e:
+    print(f"[TTS] pyttsx3 import/init failed: {type(e).__name__}: {e}")
 
 
 class LiveTranslateClient:

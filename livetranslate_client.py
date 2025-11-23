@@ -118,6 +118,41 @@ class LiveTranslateClient:
 
     # --------------------- Audio Out (TTS) ---------------------
 
+    def _pick_real_speaker_index(self) -> tuple[int | None, int, str]:
+        """
+        自动选择真实扬声器/耳机，避免把TTS回灌到虚拟线。
+        参照成功的 main.py 中的 pick_speaker_index() 逻辑。
+
+        Returns:
+            tuple: (device_index, sample_rate, device_name)
+        """
+        speaker_keywords = ("Speakers", "Headphones", "Realtek", "耳机", "扬声器")
+        virtual_keywords = ("cable", "virtual", "vb-audio")
+
+        candidate_index = None
+        candidate_rate = 44100
+        candidate_name = "Unknown"
+
+        for i in range(self.pyaudio_instance.get_device_count()):
+            info = self.pyaudio_instance.get_device_info_by_index(i)
+            if int(info.get('maxOutputChannels', 0)) > 0:
+                name = info.get('name', '')
+                name_lower = name.lower()
+
+                # 跳过虚拟音频线缆
+                if any(vk in name_lower for vk in virtual_keywords):
+                    continue
+
+                # 选择真实扬声器/耳机
+                if any(sk.lower() in name_lower for sk in speaker_keywords):
+                    candidate_index = i
+                    candidate_rate = int(info.get('defaultSampleRate', 44100))
+                    candidate_name = name
+                    print(f"[TTS] Found real speaker: [{i}] {name}")
+                    break
+
+        return candidate_index, candidate_rate, candidate_name
+
     def _audio_player_task(self):
         # 独立线程播放返回的 TTS
         # 支持指定输出设备（扬声器）
@@ -138,6 +173,9 @@ class LiveTranslateClient:
         actual_rate = self.output_rate  # TTS 输出采样率 24kHz
         need_resample = False
 
+        # 确定要使用的输出设备索引
+        effective_output_index = self.output_device_index
+
         try:
             # 获取设备支持的采样率
             dev_rate = 44100  # 默认安全值
@@ -148,16 +186,28 @@ class LiveTranslateClient:
                 dev_name = dev_info.get('name', 'Unknown')
                 print(f"[TTS] Using SPECIFIED output device: {dev_name} (index={self.output_device_index})")
             else:
-                # 不指定设备，让 PyAudio 自动选择系统默认输出设备
-                # 这是最可靠的方式，和独立测试程序的行为一致
-                try:
-                    default_out = self.pyaudio_instance.get_default_output_device_info()
-                    dev_rate = int(default_out.get('defaultSampleRate', 44100))
-                    dev_name = default_out.get('name', 'Unknown')
-                    print(f"[TTS] Using AUTO/SYSTEM DEFAULT output device: {dev_name}")
-                except Exception as e:
-                    print(f"[TTS] Could not get default device info: {e}")
-                    print(f"[TTS] Will let PyAudio choose automatically")
+                # 关键修复：自动选择真实扬声器，避免虚拟音频线缆
+                # 参照成功的 main.py 中的 pick_speaker_index() 逻辑
+                print(f"[TTS] No output device specified, auto-detecting real speaker...")
+                speaker_idx, speaker_rate, speaker_name = self._pick_real_speaker_index()
+
+                if speaker_idx is not None:
+                    effective_output_index = speaker_idx
+                    dev_rate = speaker_rate
+                    dev_name = speaker_name
+                    print(f"[TTS] AUTO-SELECTED real speaker: {dev_name} (index={speaker_idx})")
+                else:
+                    # 找不到明确的扬声器，回退到系统默认（但警告用户）
+                    print(f"[TTS] WARNING: No real speaker found, falling back to system default")
+                    try:
+                        default_out = self.pyaudio_instance.get_default_output_device_info()
+                        dev_rate = int(default_out.get('defaultSampleRate', 44100))
+                        dev_name = default_out.get('name', 'Unknown')
+                        print(f"[TTS] Using SYSTEM DEFAULT output device: {dev_name}")
+                        print(f"[TTS] WARNING: If this is a virtual cable, you won't hear audio!")
+                    except Exception as e:
+                        print(f"[TTS] Could not get default device info: {e}")
+                        print(f"[TTS] Will let PyAudio choose automatically")
             print(f"[TTS] Device native rate: {dev_rate}Hz, TTS rate: {self.output_rate}Hz")
 
             # Windows 音频驱动器对非原生采样率支持不佳，可能导致堆损坏
@@ -181,8 +231,9 @@ class LiveTranslateClient:
                 "output": True,
                 "frames_per_buffer": frames_per_buffer,
             }
-            if self.output_device_index is not None:
-                open_kwargs["output_device_index"] = self.output_device_index
+            # 使用 effective_output_index（可能是用户指定的，也可能是自动检测的真实扬声器）
+            if effective_output_index is not None:
+                open_kwargs["output_device_index"] = effective_output_index
 
             print(f"[TTS] Opening stream with kwargs: {open_kwargs}")
             stream = self.pyaudio_instance.open(**open_kwargs)

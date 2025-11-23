@@ -59,6 +59,36 @@ class AudioController:
 
         return success
 
+    def _extract_short_device_name(self, full_name: str) -> str:
+        """
+        从PyAudio返回的完整设备名称中提取短名称用于nircmd
+        PyAudio会截断设备名称（约31字符），nircmd需要能匹配的名称
+        """
+        if not full_name:
+            return full_name
+
+        # 对于中文扬声器，提取"扬声器"部分
+        if "扬声器" in full_name:
+            return "扬声器"
+
+        # 对于Realtek设备，使用"Speakers"（Windows默认名称）
+        if "realtek" in full_name.lower():
+            return "Speakers"
+
+        # 对于耳机
+        if "耳机" in full_name:
+            return "耳机"
+        if "headphones" in full_name.lower():
+            return "Headphones"
+
+        # 其他情况，尝试提取括号前的部分
+        if "(" in full_name:
+            short_name = full_name.split("(")[0].strip()
+            if short_name:
+                return short_name
+
+        return full_name
+
     def save_speaker_device(self, device_name: str) -> None:
         """
         保存TTS输出使用的扬声器设备名称
@@ -121,9 +151,13 @@ class AudioController:
 
         # 首先尝试恢复到保存的TTS设备
         if self.saved_speaker_device:
+            # 提取短名称用于nircmd（PyAudio返回的名称被截断，nircmd可能无法匹配）
+            short_name = self._extract_short_device_name(self.saved_speaker_device)
             print(f"[AudioControl] Restoring to saved device: {self.saved_speaker_device}")
-            if self._run_nircmd("setdefaultsounddevice", self.saved_speaker_device, "1"):
-                print(f"[AudioControl] Successfully restored to {self.saved_speaker_device}")
+            print(f"[AudioControl] Using short name for nircmd: {short_name}")
+
+            if self._run_nircmd("setdefaultsounddevice", short_name, "1"):
+                print(f"[AudioControl] Successfully restored to {short_name}")
                 self.saved_speaker_device = None  # 清除保存的设备
                 return True
             else:

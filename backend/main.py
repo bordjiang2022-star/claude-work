@@ -60,6 +60,7 @@ class TranslationConfig(BaseModel):
     audio_enabled: bool = True
     input_device_index: Optional[int] = None  # 输入设备（麦克风/虚拟音频线缆）
     output_device_index: Optional[int] = None  # 输出设备（扬声器，用于TTS播放）
+    tts_engine: Optional[str] = "alibaba"  # TTS引擎: alibaba 或 windows
 
 
 class TranscriptResponse(BaseModel):
@@ -229,6 +230,7 @@ async def start_translation(
     print(f"[API]   audio_enabled: {config.audio_enabled}")
     print(f"[API]   input_device_index: {config.input_device_index}")
     print(f"[API]   output_device_index: {config.output_device_index}")
+    print(f"[API]   tts_engine: {config.tts_engine}")
 
     success = await translation_service.start_translation(
         user_id=current_user.id,
@@ -238,6 +240,7 @@ async def start_translation(
         audio_enabled=config.audio_enabled,  # 使用前端配置（默认为True）
         input_device_index=config.input_device_index,  # 输入设备（虚拟音频线缆）
         output_device_index=config.output_device_index,  # TTS 输出设备（扬声器）
+        tts_engine=config.tts_engine or "alibaba",  # TTS引擎选择
         on_text_callback=on_text_received
     )
 

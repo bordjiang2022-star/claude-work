@@ -16,6 +16,14 @@ import pyaudio
 import websockets
 from websockets import connect
 
+# Windows TTS 支持（可选）
+try:
+    import pyttsx3
+    PYTTSX3_AVAILABLE = True
+except ImportError:
+    PYTTSX3_AVAILABLE = False
+    print("[TTS] pyttsx3 not installed, Windows TTS will not be available")
+
 
 class LiveTranslateClient:
     """
@@ -34,6 +42,7 @@ class LiveTranslateClient:
         audio_enabled: bool = True,
         input_device_index: int | None = None,
         output_device_index: int | None = None,  # TTS 输出设备索引
+        tts_engine: str = "alibaba",  # TTS引擎: alibaba 或 windows
     ):
         if not api_key:
             raise ValueError("API key cannot be empty.")
@@ -44,6 +53,12 @@ class LiveTranslateClient:
         self.audio_enabled = audio_enabled
         self.voice = voice if audio_enabled else "Cherry"
         self.output_device_index = output_device_index  # TTS 输出设备
+        self.tts_engine = tts_engine  # TTS引擎选择
+
+        # Windows TTS 引擎（pyttsx3）
+        self.windows_tts_engine = None
+        self.windows_tts_queue: "queue.Queue[str | None]" = queue.Queue()
+        self.windows_tts_thread: threading.Thread | None = None
 
         # Realtime WS endpoint
         self.api_url = (
@@ -87,14 +102,19 @@ class LiveTranslateClient:
 
     async def configure_session(self):
         """配置翻译会话：输出类型/音色/目标语言等。"""
+        # 当使用 Windows TTS 时，不请求阿里云返回音频
+        use_alibaba_audio = self.audio_enabled and self.tts_engine == "alibaba"
+
         session = {
-            "modalities": ["text", "audio"] if self.audio_enabled else ["text"],
+            "modalities": ["text", "audio"] if use_alibaba_audio else ["text"],
             "input_audio_format": "pcm16",
             "output_audio_format": "pcm16",
             "translation": {"language": self.target_language},
         }
-        if self.audio_enabled and self.voice:
+        if use_alibaba_audio and self.voice:
             session["voice"] = self.voice
+
+        print(f"[WS] Configuring session: tts_engine={self.tts_engine}, use_alibaba_audio={use_alibaba_audio}")
 
         event = {
             "event_id": f"event_{int(time.time() * 1000)}",
@@ -280,19 +300,132 @@ class LiveTranslateClient:
             print("[TTS] Audio player stopped")
 
     def start_audio_player(self):
-        print(f"[TTS] start_audio_player called, audio_enabled={self.audio_enabled}")
+        print(f"[TTS] start_audio_player called, audio_enabled={self.audio_enabled}, tts_engine={self.tts_engine}")
         if not self.audio_enabled:
             print("[TTS] Audio disabled, skipping player start")
             return
-        if self.audio_player_thread is None or not self.audio_player_thread.is_alive():
-            print("[TTS] Creating and starting audio player thread")
-            self.audio_player_thread = threading.Thread(
-                target=self._audio_player_task, daemon=True
-            )
-            self.audio_player_thread.start()
-            print("[TTS] Audio player thread started")
+
+        if self.tts_engine == "windows":
+            # 使用 Windows TTS (pyttsx3)
+            self._start_windows_tts_player()
         else:
-            print("[TTS] Audio player thread already running")
+            # 使用阿里云 TTS（默认）
+            if self.audio_player_thread is None or not self.audio_player_thread.is_alive():
+                print("[TTS] Creating and starting Alibaba audio player thread")
+                self.audio_player_thread = threading.Thread(
+                    target=self._audio_player_task, daemon=True
+                )
+                self.audio_player_thread.start()
+                print("[TTS] Alibaba audio player thread started")
+            else:
+                print("[TTS] Alibaba audio player thread already running")
+
+    # --------------------- Windows TTS (pyttsx3) ---------------------
+
+    def _start_windows_tts_player(self):
+        """启动 Windows TTS 播放器线程"""
+        if not PYTTSX3_AVAILABLE:
+            print("[TTS] ERROR: pyttsx3 not available, cannot use Windows TTS")
+            return
+
+        if self.windows_tts_thread is None or not self.windows_tts_thread.is_alive():
+            print("[TTS] Creating and starting Windows TTS player thread")
+            self.windows_tts_thread = threading.Thread(
+                target=self._windows_tts_player_task, daemon=True
+            )
+            self.windows_tts_thread.start()
+            print("[TTS] Windows TTS player thread started")
+        else:
+            print("[TTS] Windows TTS player thread already running")
+
+    def _windows_tts_player_task(self):
+        """Windows TTS 播放器线程任务"""
+        print(f"[TTS-WIN] ========================================")
+        print(f"[TTS-WIN] Windows TTS player task STARTED")
+        print(f"[TTS-WIN] target_language={self.target_language}")
+        print(f"[TTS-WIN] ========================================")
+
+        try:
+            # 初始化 pyttsx3 引擎（必须在同一线程中初始化和使用）
+            engine = pyttsx3.init()
+
+            # 设置语音属性
+            engine.setProperty('rate', 180)  # 语速
+            engine.setProperty('volume', 1.0)  # 音量
+
+            # 尝试选择合适的语音
+            voices = engine.getProperty('voices')
+            target_voice = None
+
+            # 根据目标语言选择语音
+            lang_map = {
+                'ja': ['japanese', 'japan', 'haruka', 'sayaka', 'microsoft haruka', 'microsoft sayaka'],
+                'zh': ['chinese', 'china', 'huihui', 'yaoyao', 'microsoft huihui', 'microsoft yaoyao'],
+                'ko': ['korean', 'korea', 'heami', 'microsoft heami'],
+                'en': ['english', 'david', 'zira', 'mark', 'microsoft david', 'microsoft zira'],
+            }
+
+            search_keywords = lang_map.get(self.target_language, lang_map['en'])
+
+            print(f"[TTS-WIN] Available voices:")
+            for voice in voices:
+                voice_name_lower = voice.name.lower()
+                print(f"[TTS-WIN]   - {voice.name} ({voice.id})")
+                if target_voice is None:
+                    for keyword in search_keywords:
+                        if keyword in voice_name_lower:
+                            target_voice = voice.id
+                            print(f"[TTS-WIN] Selected voice: {voice.name}")
+                            break
+
+            if target_voice:
+                engine.setProperty('voice', target_voice)
+            else:
+                print(f"[TTS-WIN] No matching voice found for '{self.target_language}', using default")
+
+            sentences_spoken = 0
+            print(f"[TTS-WIN] Starting playback loop, is_connected={self.is_connected}")
+
+            while self.is_connected or not self.windows_tts_queue.empty():
+                try:
+                    text = self.windows_tts_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+
+                if text is None:
+                    print("[TTS-WIN] Received stop signal")
+                    break
+
+                # 清理文本
+                text = text.strip()
+                if not text:
+                    self.windows_tts_queue.task_done()
+                    continue
+
+                try:
+                    print(f"[TTS-WIN] Speaking: {text[:50]}...")
+                    engine.say(text)
+                    engine.runAndWait()
+                    sentences_spoken += 1
+                    if sentences_spoken % 10 == 0:
+                        print(f"[TTS-WIN] Spoken {sentences_spoken} sentences")
+                except Exception as speak_err:
+                    print(f"[TTS-WIN] Error speaking: {speak_err}")
+
+                self.windows_tts_queue.task_done()
+
+            print(f"[TTS-WIN] Playback loop ended, total sentences spoken: {sentences_spoken}")
+
+        except Exception as e:
+            print(f"[TTS-WIN] Error in Windows TTS player: {e}")
+            traceback.print_exc()
+        finally:
+            print("[TTS-WIN] Windows TTS player stopped")
+
+    def speak_with_windows_tts(self, text: str):
+        """将文本添加到 Windows TTS 队列"""
+        if self.tts_engine == "windows" and self.audio_enabled:
+            self.windows_tts_queue.put(text)
 
     # --------------------- Receive ---------------------
 
@@ -340,6 +473,10 @@ class LiveTranslateClient:
                             else:
                                 on_text_received(text + "\n")
                         print(f"[TRANS] {text}")
+
+                        # 如果使用 Windows TTS，将完整句子发送到朗读队列
+                        if self.tts_engine == "windows" and self.audio_enabled:
+                            self.speak_with_windows_tts(text)
 
                 elif et == "response.done":
                     usage = event.get("response", {}).get("usage", {})
@@ -408,11 +545,21 @@ class LiveTranslateClient:
             with contextlib.suppress(Exception):
                 await self.ws.close()
             print("[WS] Closed.")
+
+        # 关闭阿里云 TTS 播放器线程
         if self.audio_player_thread:
             self.audio_playback_queue.put(None)
             with contextlib.suppress(Exception):
                 self.audio_player_thread.join(timeout=1)
-            print("[AUDIO] Player stopped.")
+            print("[AUDIO] Alibaba TTS player stopped.")
+
+        # 关闭 Windows TTS 播放器线程
+        if self.windows_tts_thread:
+            self.windows_tts_queue.put(None)
+            with contextlib.suppress(Exception):
+                self.windows_tts_thread.join(timeout=2)
+            print("[AUDIO] Windows TTS player stopped.")
+
         with contextlib.suppress(Exception):
             self.pyaudio_instance.terminate()
         print("[AUDIO] PyAudio terminated.")

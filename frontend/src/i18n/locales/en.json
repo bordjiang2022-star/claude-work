@@ -16,7 +16,9 @@
   },
   "translation": {
     "targetLanguage": "Target Language",
+    "ttsEngine": "TTS Engine",
     "ttsVoice": "TTS Voice",
+    "windowsTtsNote": "Using Windows system voice",
     "start": "START",
     "stop": "STOP",
     "translating": "Translating",
@@ -25,6 +27,10 @@
     "waitingForInput": "Waiting for voice input...",
     "waitingForTranslation": "Waiting for translation result...",
     "characterCount": "{{count}} characters"
+  },
+  "ttsEngines": {
+    "alibaba": "Alibaba Cloud",
+    "windows": "Windows System Voice"
   },
   "languages": {
     "en": "English",

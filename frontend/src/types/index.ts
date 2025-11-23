@@ -28,6 +28,7 @@ export interface TranslationConfig {
   audio_enabled: boolean;
   input_device_index?: number;  // 输入设备（麦克风/虚拟音频线缆）
   output_device_index?: number; // 输出设备（扬声器，用于TTS播放）
+  tts_engine?: 'alibaba' | 'windows'; // TTS引擎选择
 }
 
 export interface AudioDevice {
@@ -73,3 +74,5 @@ export interface WebSocketMessage {
 export type Language = 'en' | 'zh' | 'ja' | 'ko' | 'ru' | 'fr' | 'de' | 'pt' | 'es' | 'it' | 'yue';
 
 export type Voice = 'Cherry' | 'Nofish' | 'Sunny' | 'Jada' | 'Dylan' | 'Peter' | 'Eric' | 'Kiki';
+
+export type TtsEngine = 'alibaba' | 'windows';

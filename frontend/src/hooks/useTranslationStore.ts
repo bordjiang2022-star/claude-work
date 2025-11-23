@@ -25,6 +25,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
     target_language: 'en',
     voice: 'Cherry',
     audio_enabled: true,
+    tts_engine: 'alibaba', // 默认使用阿里云TTS
   },
   transcripts: [],
   currentSessionId: null,

@@ -16,7 +16,9 @@
   },
   "translation": {
     "targetLanguage": "目標語言",
+    "ttsEngine": "TTS引擎",
     "ttsVoice": "TTS音色",
+    "windowsTtsNote": "使用Windows系統語音",
     "start": "開始",
     "stop": "停止",
     "translating": "翻譯中",
@@ -25,6 +27,10 @@
     "waitingForInput": "等待音頻輸入...",
     "waitingForTranslation": "等待翻譯結果...",
     "characterCount": "{{count}} 字"
+  },
+  "ttsEngines": {
+    "alibaba": "阿里雲 (Alibaba)",
+    "windows": "Windows系統語音"
   },
   "languages": {
     "en": "英語 (English)",

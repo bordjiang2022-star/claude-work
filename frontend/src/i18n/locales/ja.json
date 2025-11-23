@@ -16,7 +16,9 @@
   },
   "translation": {
     "targetLanguage": "翻訳先言語",
+    "ttsEngine": "TTSエンジン",
     "ttsVoice": "TTS音声",
+    "windowsTtsNote": "Windowsシステム音声を使用",
     "start": "開始",
     "stop": "停止",
     "translating": "翻訳中",
@@ -25,6 +27,10 @@
     "waitingForInput": "音声入力を待っています...",
     "waitingForTranslation": "翻訳結果を待っています...",
     "characterCount": "{{count}} 文字"
+  },
+  "ttsEngines": {
+    "alibaba": "アリババクラウド (Alibaba)",
+    "windows": "Windowsシステム音声"
   },
   "languages": {
     "en": "英語 (English)",

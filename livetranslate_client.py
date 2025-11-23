@@ -35,6 +35,20 @@ except ImportError as e:
 except Exception as e:
     print(f"[TTS] pyttsx3 import/init failed: {type(e).__name__}: {e}")
 
+# Windows SAPI COM 直接访问支持（低延迟内存流 TTS）
+SAPI_AVAILABLE = False
+try:
+    import comtypes.client
+    # 初始化 SAPI 类型库
+    comtypes.client.GetModule("SAPI.SpVoice")
+    from comtypes.gen import SpeechLib
+    SAPI_AVAILABLE = True
+    print("[TTS] SAPI COM interface available for low-latency TTS")
+except ImportError:
+    print("[TTS] comtypes not installed, falling back to pyttsx3")
+except Exception as e:
+    print(f"[TTS] SAPI COM init failed: {type(e).__name__}: {e}")
+
 
 # ===================== 全局 Windows TTS 管理器（单例） =====================
 # pyttsx3 在 Windows 上使用 SAPI，不支持多实例同时运行
@@ -46,7 +60,8 @@ class WindowsTTSManager:
     - 确保只有一个 pyttsx3 引擎实例
     - 所有翻译会话共享同一个播放队列和线程
     - 避免 "run loop already started" 错误
-    - 支持输出到指定的扬声器设备（通过 save_to_file + PyAudio 播放）
+    - 支持输出到指定的扬声器设备
+    - 优先使用 SAPI COM 内存流（低延迟），回退到 pyttsx3 文件方式
     """
     _instance = None
     _lock = threading.Lock()
@@ -71,7 +86,9 @@ class WindowsTTSManager:
         self._engine_lock = threading.Lock()
         self.output_device_index: int | None = None  # 输出设备索引
         self.pyaudio_instance: pyaudio.PyAudio | None = None
-        print("[TTS-MGR] WindowsTTSManager singleton initialized")
+        self.use_sapi_direct = SAPI_AVAILABLE  # 优先使用 SAPI 直接内存输出
+        self._sapi_voice = None  # 缓存的 SAPI 语音对象
+        print(f"[TTS-MGR] WindowsTTSManager singleton initialized (SAPI direct: {self.use_sapi_direct})")
 
     def set_output_device(self, device_index: int | None):
         """设置输出设备索引"""
@@ -210,17 +227,154 @@ class WindowsTTSManager:
             print(f"[TTS-MGR] Error playing WAV: {e}")
             return False
 
+    def _speak_with_sapi_direct(self, text: str, target_language: str) -> bool:
+        """
+        使用 SAPI COM 直接输出到内存，然后通过 PyAudio 播放到指定设备。
+        这种方式避免了文件 I/O，大大降低延迟。
+        """
+        if not SAPI_AVAILABLE:
+            return False
+
+        try:
+            import comtypes.client
+            from comtypes.gen import SpeechLib
+
+            # 创建 SAPI 语音对象
+            voice = comtypes.client.CreateObject("SAPI.SpVoice")
+
+            # 选择语音
+            voices = voice.GetVoices()
+            lang_map = {
+                'ja': ['japanese', 'japan', 'haruka', 'sayaka'],
+                'zh': ['chinese', 'china', 'huihui', 'yaoyao'],
+                'ko': ['korean', 'korea', 'heami'],
+                'en': ['english', 'david', 'zira', 'mark'],
+            }
+            search_keywords = lang_map.get(target_language, lang_map['en'])
+
+            for i in range(voices.Count):
+                v = voices.Item(i)
+                desc = v.GetDescription().lower()
+                for keyword in search_keywords:
+                    if keyword in desc:
+                        voice.Voice = v
+                        break
+
+            # 设置语速 (-10 到 10，0 为正常)
+            voice.Rate = 2  # 稍快
+
+            # 创建内存流
+            stream = comtypes.client.CreateObject("SAPI.SpMemoryStream")
+
+            # 设置音频格式：22kHz, 16-bit, Mono
+            format_obj = comtypes.client.CreateObject("SAPI.SpAudioFormat")
+            format_obj.Type = SpeechLib.SAFT22kHz16BitMono
+            stream.Format = format_obj
+
+            # 将语音输出到内存流
+            voice.AudioOutputStream = stream
+
+            # 合成语音
+            voice.Speak(text, 0)  # 0 = 同步
+
+            # 获取音频数据
+            stream.Seek(0, 0)  # 回到开头
+            audio_data = stream.GetData()
+
+            if not audio_data or len(audio_data) == 0:
+                print("[TTS-MGR] SAPI produced no audio data")
+                return False
+
+            # 将 audio_data 转换为 bytes
+            if hasattr(audio_data, 'tobytes'):
+                audio_bytes = audio_data.tobytes()
+            elif isinstance(audio_data, (bytes, bytearray)):
+                audio_bytes = bytes(audio_data)
+            else:
+                # comtypes 返回的可能是 SAFEARRAY
+                audio_bytes = bytes(audio_data)
+
+            # 通过 PyAudio 播放到指定设备
+            return self._play_audio_data(audio_bytes, 22050, 2, 1)
+
+        except Exception as e:
+            print(f"[TTS-MGR] SAPI direct error: {e}")
+            traceback.print_exc()
+            return False
+
+    def _play_audio_data(self, audio_data: bytes, sample_rate: int, sample_width: int, channels: int) -> bool:
+        """
+        直接播放内存中的音频数据到指定设备
+        """
+        if self.pyaudio_instance is None:
+            print("[TTS-MGR] PyAudio not initialized")
+            return False
+
+        try:
+            # 确定实际使用的设备
+            effective_device = self.output_device_index
+            if effective_device is None:
+                effective_device, _, dev_name = self._pick_real_speaker_index()
+                if effective_device is not None:
+                    print(f"[TTS-MGR] Auto-selected speaker: {dev_name}")
+
+            # 获取设备原生采样率
+            dev_rate = sample_rate
+            if effective_device is not None:
+                try:
+                    dev_info = self.pyaudio_instance.get_device_info_by_index(effective_device)
+                    dev_rate = int(dev_info.get('defaultSampleRate', sample_rate))
+                except:
+                    pass
+
+            # 如果设备采样率不同，需要重采样
+            if dev_rate != sample_rate:
+                audio_data, _ = audioop.ratecv(
+                    audio_data, sample_width, channels, sample_rate, dev_rate, None
+                )
+                actual_rate = dev_rate
+            else:
+                actual_rate = sample_rate
+
+            # 打开音频流
+            open_kwargs = {
+                "format": self.pyaudio_instance.get_format_from_width(sample_width),
+                "channels": channels,
+                "rate": actual_rate,
+                "output": True,
+            }
+            if effective_device is not None:
+                open_kwargs["output_device_index"] = effective_device
+
+            stream = self.pyaudio_instance.open(**open_kwargs)
+
+            # 分块播放
+            chunk_size = 4096
+            offset = 0
+            while offset < len(audio_data):
+                chunk = audio_data[offset:offset + chunk_size]
+                stream.write(chunk)
+                offset += chunk_size
+
+            stream.stop_stream()
+            stream.close()
+            return True
+
+        except Exception as e:
+            print(f"[TTS-MGR] Error playing audio data: {e}")
+            return False
+
     def _player_task(self):
         """全局 TTS 播放器线程任务"""
         print("[TTS-MGR] ========================================")
         print("[TTS-MGR] Global Windows TTS player task STARTED")
         print(f"[TTS-MGR] Output device index: {self.output_device_index}")
+        print(f"[TTS-MGR] Using SAPI direct (low-latency): {self.use_sapi_direct}")
         print("[TTS-MGR] ========================================")
 
         engine = None
         sentences_spoken = 0
-        # 使用指定设备输出模式（save_to_file + PyAudio 播放）
-        use_device_output = True  # 始终使用设备输出模式以支持自动选择扬声器
+        sapi_failures = 0  # 跟踪 SAPI 失败次数
 
         try:
             while self.is_running or not self.queue.empty():
@@ -239,6 +393,26 @@ class WindowsTTSManager:
                     self.queue.task_done()
                     continue
 
+                print(f"[TTS-MGR] Speaking: {text[:50]}...")
+                start_time = time.time()
+
+                # 方案1：优先使用 SAPI 直接内存输出（低延迟）
+                if self.use_sapi_direct and sapi_failures < 3:
+                    try:
+                        if self._speak_with_sapi_direct(text, target_language):
+                            elapsed = time.time() - start_time
+                            print(f"[TTS-MGR] SAPI direct succeeded in {elapsed:.2f}s")
+                            sentences_spoken += 1
+                            self.queue.task_done()
+                            continue
+                        else:
+                            sapi_failures += 1
+                            print(f"[TTS-MGR] SAPI direct failed, falling back to pyttsx3")
+                    except Exception as sapi_err:
+                        sapi_failures += 1
+                        print(f"[TTS-MGR] SAPI direct error: {sapi_err}")
+
+                # 方案2：回退到 pyttsx3 文件方式
                 try:
                     # 每次说话前重新初始化引擎（避免 "run loop already started" 错误）
                     if engine is not None:
@@ -259,30 +433,25 @@ class WindowsTTSManager:
                             print(f"[TTS-MGR] Switched voice for language: {target_language}")
                         self.current_language = target_language
 
-                    print(f"[TTS-MGR] Speaking: {text[:50]}...")
+                    # 使用 save_to_file + PyAudio 播放到指定设备
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                        tmp_path = tmp.name
 
-                    if use_device_output:
-                        # 使用 save_to_file + PyAudio 播放到指定设备
-                        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-                            tmp_path = tmp.name
-
-                        try:
-                            engine.save_to_file(text, tmp_path)
-                            engine.runAndWait()
-
-                            # 播放到指定设备
-                            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-                                self._play_wav_to_device(tmp_path, self.output_device_index)
-                            else:
-                                print(f"[TTS-MGR] WAV file not generated or empty")
-                        finally:
-                            # 清理临时文件
-                            if os.path.exists(tmp_path):
-                                os.unlink(tmp_path)
-                    else:
-                        # 直接使用 pyttsx3 播放（输出到系统默认设备）
-                        engine.say(text)
+                    try:
+                        engine.save_to_file(text, tmp_path)
                         engine.runAndWait()
+
+                        # 播放到指定设备
+                        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                            self._play_wav_to_device(tmp_path, self.output_device_index)
+                            elapsed = time.time() - start_time
+                            print(f"[TTS-MGR] pyttsx3 file method succeeded in {elapsed:.2f}s")
+                        else:
+                            print(f"[TTS-MGR] WAV file not generated or empty")
+                    finally:
+                        # 清理临时文件
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
 
                     sentences_spoken += 1
 

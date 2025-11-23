@@ -11,6 +11,9 @@ import traceback
 import contextlib
 import audioop  # Python 3.11 内置，用于重采样
 import inspect
+import tempfile
+import os
+import wave
 
 import pyaudio
 import websockets
@@ -43,6 +46,7 @@ class WindowsTTSManager:
     - 确保只有一个 pyttsx3 引擎实例
     - 所有翻译会话共享同一个播放队列和线程
     - 避免 "run loop already started" 错误
+    - 支持输出到指定的扬声器设备（通过 save_to_file + PyAudio 播放）
     """
     _instance = None
     _lock = threading.Lock()
@@ -65,16 +69,29 @@ class WindowsTTSManager:
         self.is_running = False
         self.current_language = "en"
         self._engine_lock = threading.Lock()
+        self.output_device_index: int | None = None  # 输出设备索引
+        self.pyaudio_instance: pyaudio.PyAudio | None = None
         print("[TTS-MGR] WindowsTTSManager singleton initialized")
 
-    def start(self):
+    def set_output_device(self, device_index: int | None):
+        """设置输出设备索引"""
+        self.output_device_index = device_index
+        print(f"[TTS-MGR] Output device set to index: {device_index}")
+
+    def start(self, output_device_index: int | None = None):
         """启动全局 TTS 播放线程"""
+        if output_device_index is not None:
+            self.output_device_index = output_device_index
+
         with self._engine_lock:
             if self.thread is None or not self.thread.is_alive():
                 self.is_running = True
+                # 初始化 PyAudio
+                if self.pyaudio_instance is None:
+                    self.pyaudio_instance = pyaudio.PyAudio()
                 self.thread = threading.Thread(target=self._player_task, daemon=True)
                 self.thread.start()
-                print("[TTS-MGR] Global Windows TTS player thread started")
+                print(f"[TTS-MGR] Global Windows TTS player thread started, output_device={self.output_device_index}")
 
     def stop(self):
         """停止全局 TTS 播放线程"""
@@ -83,6 +100,9 @@ class WindowsTTSManager:
         if self.thread:
             self.thread.join(timeout=2)
             self.thread = None
+        if self.pyaudio_instance:
+            self.pyaudio_instance.terminate()
+            self.pyaudio_instance = None
         print("[TTS-MGR] Global Windows TTS player stopped")
 
     def speak(self, text: str, target_language: str = "en"):
@@ -114,14 +134,93 @@ class WindowsTTSManager:
                     return voice.id
         return None
 
+    def _pick_real_speaker_index(self) -> tuple[int | None, int, str]:
+        """
+        自动选择真实扬声器/耳机，避免把TTS回灌到虚拟线。
+        Returns: (device_index, sample_rate, device_name)
+        """
+        if self.pyaudio_instance is None:
+            return None, 44100, "Unknown"
+
+        speaker_keywords = ("Speakers", "Headphones", "Realtek", "耳机", "扬声器")
+        virtual_keywords = ("cable", "virtual", "vb-audio")
+
+        for i in range(self.pyaudio_instance.get_device_count()):
+            info = self.pyaudio_instance.get_device_info_by_index(i)
+            if int(info.get('maxOutputChannels', 0)) > 0:
+                name = info.get('name', '')
+                name_lower = name.lower()
+
+                # 跳过虚拟音频线缆
+                if any(vk in name_lower for vk in virtual_keywords):
+                    continue
+
+                # 选择真实扬声器/耳机
+                if any(sk.lower() in name_lower for sk in speaker_keywords):
+                    rate = int(info.get('defaultSampleRate', 44100))
+                    print(f"[TTS-MGR] Auto-detected real speaker: [{i}] {name}")
+                    return i, rate, name
+
+        return None, 44100, "Unknown"
+
+    def _play_wav_to_device(self, wav_path: str, device_index: int | None) -> bool:
+        """播放 WAV 文件到指定设备"""
+        if self.pyaudio_instance is None:
+            print("[TTS-MGR] PyAudio not initialized")
+            return False
+
+        try:
+            with wave.open(wav_path, 'rb') as wf:
+                channels = wf.getnchannels()
+                sample_width = wf.getsampwidth()
+                frame_rate = wf.getframerate()
+
+                # 确定实际使用的设备
+                effective_device = device_index
+                if effective_device is None:
+                    # 自动选择真实扬声器
+                    effective_device, _, dev_name = self._pick_real_speaker_index()
+                    if effective_device is not None:
+                        print(f"[TTS-MGR] Auto-selected speaker: {dev_name}")
+
+                # 打开音频流
+                open_kwargs = {
+                    "format": self.pyaudio_instance.get_format_from_width(sample_width),
+                    "channels": channels,
+                    "rate": frame_rate,
+                    "output": True,
+                }
+                if effective_device is not None:
+                    open_kwargs["output_device_index"] = effective_device
+
+                stream = self.pyaudio_instance.open(**open_kwargs)
+
+                # 播放音频
+                chunk_size = 1024
+                data = wf.readframes(chunk_size)
+                while data:
+                    stream.write(data)
+                    data = wf.readframes(chunk_size)
+
+                stream.stop_stream()
+                stream.close()
+                return True
+
+        except Exception as e:
+            print(f"[TTS-MGR] Error playing WAV: {e}")
+            return False
+
     def _player_task(self):
         """全局 TTS 播放器线程任务"""
         print("[TTS-MGR] ========================================")
         print("[TTS-MGR] Global Windows TTS player task STARTED")
+        print(f"[TTS-MGR] Output device index: {self.output_device_index}")
         print("[TTS-MGR] ========================================")
 
         engine = None
         sentences_spoken = 0
+        # 使用指定设备输出模式（save_to_file + PyAudio 播放）
+        use_device_output = True  # 始终使用设备输出模式以支持自动选择扬声器
 
         try:
             while self.is_running or not self.queue.empty():
@@ -161,12 +260,35 @@ class WindowsTTSManager:
                         self.current_language = target_language
 
                     print(f"[TTS-MGR] Speaking: {text[:50]}...")
-                    engine.say(text)
-                    engine.runAndWait()
+
+                    if use_device_output:
+                        # 使用 save_to_file + PyAudio 播放到指定设备
+                        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                            tmp_path = tmp.name
+
+                        try:
+                            engine.save_to_file(text, tmp_path)
+                            engine.runAndWait()
+
+                            # 播放到指定设备
+                            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                                self._play_wav_to_device(tmp_path, self.output_device_index)
+                            else:
+                                print(f"[TTS-MGR] WAV file not generated or empty")
+                        finally:
+                            # 清理临时文件
+                            if os.path.exists(tmp_path):
+                                os.unlink(tmp_path)
+                    else:
+                        # 直接使用 pyttsx3 播放（输出到系统默认设备）
+                        engine.say(text)
+                        engine.runAndWait()
+
                     sentences_spoken += 1
 
                 except Exception as speak_err:
                     print(f"[TTS-MGR] Error speaking: {speak_err}")
+                    traceback.print_exc()
                     # 出错后清理引擎
                     if engine:
                         try:
@@ -508,8 +630,9 @@ class LiveTranslateClient:
 
         # 使用全局 Windows TTS 管理器（单例），避免多实例冲突
         tts_manager = get_windows_tts_manager()
-        tts_manager.start()
-        print("[TTS] Using global Windows TTS manager")
+        # 传递输出设备索引，支持输出到指定扬声器
+        tts_manager.start(output_device_index=self.output_device_index)
+        print(f"[TTS] Using global Windows TTS manager, output_device={self.output_device_index}")
 
     def _windows_tts_player_task(self):
         """Windows TTS 播放器线程任务"""

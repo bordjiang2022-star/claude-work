@@ -61,7 +61,7 @@ class WindowsTTSManager:
     - 所有翻译会话共享同一个播放队列和线程
     - 避免 "run loop already started" 错误
     - 支持输出到指定的扬声器设备
-    - 优先使用 SAPI COM 内存流（低延迟），回退到 pyttsx3 文件方式
+    - 使用异步播放方式，避免阻塞
     """
     _instance = None
     _lock = threading.Lock()
@@ -88,6 +88,7 @@ class WindowsTTSManager:
         self.pyaudio_instance: pyaudio.PyAudio | None = None
         self.use_sapi_direct = SAPI_AVAILABLE  # 优先使用 SAPI 直接内存输出
         self._sapi_voice = None  # 缓存的 SAPI 语音对象
+        self._pyttsx3_engine = None  # 缓存的 pyttsx3 引擎（保持活着）
         print(f"[TTS-MGR] WindowsTTSManager singleton initialized (SAPI direct: {self.use_sapi_direct})")
 
     def set_output_device(self, device_index: int | None):
@@ -365,18 +366,32 @@ class WindowsTTSManager:
             return False
 
     def _player_task(self):
-        """全局 TTS 播放器线程任务"""
+        """
+        全局 TTS 播放器线程任务
+        使用异步方式：持续轮询队列，批量处理文本
+        """
         print("[TTS-MGR] ========================================")
         print("[TTS-MGR] Global Windows TTS player task STARTED")
         print(f"[TTS-MGR] Output device index: {self.output_device_index}")
         print(f"[TTS-MGR] Using SAPI direct (low-latency): {self.use_sapi_direct}")
         print("[TTS-MGR] ========================================")
 
-        engine = None
         sentences_spoken = 0
         sapi_failures = 0  # 跟踪 SAPI 失败次数
+        engine_initialized = False
 
         try:
+            # 只初始化一次 pyttsx3 引擎，保持活着
+            if PYTTSX3_AVAILABLE and self._pyttsx3_engine is None:
+                try:
+                    self._pyttsx3_engine = pyttsx3.init()
+                    self._pyttsx3_engine.setProperty('rate', 200)  # 稍快的语速
+                    self._pyttsx3_engine.setProperty('volume', 1.0)
+                    engine_initialized = True
+                    print("[TTS-MGR] pyttsx3 engine initialized once, will reuse")
+                except Exception as init_err:
+                    print(f"[TTS-MGR] pyttsx3 init error: {init_err}")
+
             while self.is_running or not self.queue.empty():
                 try:
                     item = self.queue.get(timeout=0.1)
@@ -393,7 +408,14 @@ class WindowsTTSManager:
                     self.queue.task_done()
                     continue
 
-                print(f"[TTS-MGR] Speaking: {text[:50]}...")
+                # 检查队列积压情况，如果积压超过3条，跳过当前这条，播放更新的
+                queue_size = self.queue.qsize()
+                if queue_size > 3:
+                    print(f"[TTS-MGR] Queue backlog ({queue_size}), skipping: {text[:30]}...")
+                    self.queue.task_done()
+                    continue
+
+                print(f"[TTS-MGR] Speaking ({queue_size} queued): {text[:50]}...")
                 start_time = time.time()
 
                 # 方案1：优先使用 SAPI 直接内存输出（低延迟）
@@ -412,59 +434,51 @@ class WindowsTTSManager:
                         sapi_failures += 1
                         print(f"[TTS-MGR] SAPI direct error: {sapi_err}")
 
-                # 方案2：回退到 pyttsx3 文件方式
+                # 方案2：使用 pyttsx3 直接播放（不用文件方式，更快）
                 try:
-                    # 每次说话前重新初始化引擎（避免 "run loop already started" 错误）
-                    if engine is not None:
-                        try:
-                            engine.stop()
-                        except:
-                            pass
-
-                    engine = pyttsx3.init()
-                    engine.setProperty('rate', 180)
-                    engine.setProperty('volume', 1.0)
+                    if self._pyttsx3_engine is None:
+                        # 如果引擎未初始化，尝试初始化
+                        self._pyttsx3_engine = pyttsx3.init()
+                        self._pyttsx3_engine.setProperty('rate', 200)
+                        self._pyttsx3_engine.setProperty('volume', 1.0)
+                        print("[TTS-MGR] pyttsx3 engine re-initialized")
 
                     # 切换语音（如果语言改变）
                     if target_language != self.current_language:
-                        voice_id = self._select_voice(engine, target_language)
+                        voice_id = self._select_voice(self._pyttsx3_engine, target_language)
                         if voice_id:
-                            engine.setProperty('voice', voice_id)
+                            self._pyttsx3_engine.setProperty('voice', voice_id)
                             print(f"[TTS-MGR] Switched voice for language: {target_language}")
                         self.current_language = target_language
 
-                    # 使用 save_to_file + PyAudio 播放到指定设备
-                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-                        tmp_path = tmp.name
+                    # 直接使用 say() + runAndWait()，比文件方式快得多
+                    self._pyttsx3_engine.say(text)
+                    self._pyttsx3_engine.runAndWait()
 
-                    try:
-                        engine.save_to_file(text, tmp_path)
-                        engine.runAndWait()
-
-                        # 播放到指定设备
-                        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-                            self._play_wav_to_device(tmp_path, self.output_device_index)
-                            elapsed = time.time() - start_time
-                            print(f"[TTS-MGR] pyttsx3 file method succeeded in {elapsed:.2f}s")
-                        else:
-                            print(f"[TTS-MGR] WAV file not generated or empty")
-                    finally:
-                        # 清理临时文件
-                        if os.path.exists(tmp_path):
-                            os.unlink(tmp_path)
-
+                    elapsed = time.time() - start_time
+                    print(f"[TTS-MGR] pyttsx3 direct play succeeded in {elapsed:.2f}s")
                     sentences_spoken += 1
+
+                except RuntimeError as re:
+                    # "run loop already started" 错误 - 重新创建引擎
+                    print(f"[TTS-MGR] Runtime error (will recreate engine): {re}")
+                    try:
+                        if self._pyttsx3_engine:
+                            self._pyttsx3_engine.stop()
+                    except:
+                        pass
+                    self._pyttsx3_engine = None
 
                 except Exception as speak_err:
                     print(f"[TTS-MGR] Error speaking: {speak_err}")
                     traceback.print_exc()
-                    # 出错后清理引擎
-                    if engine:
-                        try:
-                            engine.stop()
-                        except:
-                            pass
-                        engine = None
+                    # 出错后重置引擎
+                    try:
+                        if self._pyttsx3_engine:
+                            self._pyttsx3_engine.stop()
+                    except:
+                        pass
+                    self._pyttsx3_engine = None
 
                 self.queue.task_done()
 
@@ -474,11 +488,12 @@ class WindowsTTSManager:
             print(f"[TTS-MGR] Error in global TTS player: {e}")
             traceback.print_exc()
         finally:
-            if engine:
+            if self._pyttsx3_engine:
                 try:
-                    engine.stop()
+                    self._pyttsx3_engine.stop()
                 except:
                     pass
+                self._pyttsx3_engine = None
             print("[TTS-MGR] Global Windows TTS player stopped")
 
 

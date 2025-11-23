@@ -33,6 +33,176 @@ except Exception as e:
     print(f"[TTS] pyttsx3 import/init failed: {type(e).__name__}: {e}")
 
 
+# ===================== 全局 Windows TTS 管理器（单例） =====================
+# pyttsx3 在 Windows 上使用 SAPI，不支持多实例同时运行
+# 所有翻译会话共享同一个 TTS 引擎和播放线程
+
+class WindowsTTSManager:
+    """
+    全局 Windows TTS 管理器（单例模式）
+    - 确保只有一个 pyttsx3 引擎实例
+    - 所有翻译会话共享同一个播放队列和线程
+    - 避免 "run loop already started" 错误
+    """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+
+        self.queue: "queue.Queue[tuple[str, str] | None]" = queue.Queue()  # (text, target_language)
+        self.thread: threading.Thread | None = None
+        self.is_running = False
+        self.current_language = "en"
+        self._engine_lock = threading.Lock()
+        print("[TTS-MGR] WindowsTTSManager singleton initialized")
+
+    def start(self):
+        """启动全局 TTS 播放线程"""
+        with self._engine_lock:
+            if self.thread is None or not self.thread.is_alive():
+                self.is_running = True
+                self.thread = threading.Thread(target=self._player_task, daemon=True)
+                self.thread.start()
+                print("[TTS-MGR] Global Windows TTS player thread started")
+
+    def stop(self):
+        """停止全局 TTS 播放线程"""
+        self.is_running = False
+        self.queue.put(None)
+        if self.thread:
+            self.thread.join(timeout=2)
+            self.thread = None
+        print("[TTS-MGR] Global Windows TTS player stopped")
+
+    def speak(self, text: str, target_language: str = "en"):
+        """添加文本到全局播放队列"""
+        if not PYTTSX3_AVAILABLE:
+            return
+        # 确保播放线程在运行
+        if not self.thread or not self.thread.is_alive():
+            self.start()
+        self.queue.put((text, target_language))
+
+    def _select_voice(self, engine, target_language: str):
+        """根据目标语言选择合适的语音"""
+        voices = engine.getProperty('voices')
+
+        lang_map = {
+            'ja': ['japanese', 'japan', 'haruka', 'sayaka'],
+            'zh': ['chinese', 'china', 'huihui', 'yaoyao'],
+            'ko': ['korean', 'korea', 'heami'],
+            'en': ['english', 'david', 'zira', 'mark'],
+        }
+
+        search_keywords = lang_map.get(target_language, lang_map['en'])
+
+        for voice in voices:
+            voice_name_lower = voice.name.lower()
+            for keyword in search_keywords:
+                if keyword in voice_name_lower:
+                    return voice.id
+        return None
+
+    def _player_task(self):
+        """全局 TTS 播放器线程任务"""
+        print("[TTS-MGR] ========================================")
+        print("[TTS-MGR] Global Windows TTS player task STARTED")
+        print("[TTS-MGR] ========================================")
+
+        engine = None
+        sentences_spoken = 0
+
+        try:
+            while self.is_running or not self.queue.empty():
+                try:
+                    item = self.queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+
+                if item is None:
+                    print("[TTS-MGR] Received stop signal")
+                    break
+
+                text, target_language = item
+                text = text.strip()
+                if not text:
+                    self.queue.task_done()
+                    continue
+
+                try:
+                    # 每次说话前重新初始化引擎（避免 "run loop already started" 错误）
+                    if engine is not None:
+                        try:
+                            engine.stop()
+                        except:
+                            pass
+
+                    engine = pyttsx3.init()
+                    engine.setProperty('rate', 180)
+                    engine.setProperty('volume', 1.0)
+
+                    # 切换语音（如果语言改变）
+                    if target_language != self.current_language:
+                        voice_id = self._select_voice(engine, target_language)
+                        if voice_id:
+                            engine.setProperty('voice', voice_id)
+                            print(f"[TTS-MGR] Switched voice for language: {target_language}")
+                        self.current_language = target_language
+
+                    print(f"[TTS-MGR] Speaking: {text[:50]}...")
+                    engine.say(text)
+                    engine.runAndWait()
+                    sentences_spoken += 1
+
+                except Exception as speak_err:
+                    print(f"[TTS-MGR] Error speaking: {speak_err}")
+                    # 出错后清理引擎
+                    if engine:
+                        try:
+                            engine.stop()
+                        except:
+                            pass
+                        engine = None
+
+                self.queue.task_done()
+
+            print(f"[TTS-MGR] Playback loop ended, total sentences spoken: {sentences_spoken}")
+
+        except Exception as e:
+            print(f"[TTS-MGR] Error in global TTS player: {e}")
+            traceback.print_exc()
+        finally:
+            if engine:
+                try:
+                    engine.stop()
+                except:
+                    pass
+            print("[TTS-MGR] Global Windows TTS player stopped")
+
+
+# 全局单例实例
+_windows_tts_manager: WindowsTTSManager | None = None
+
+
+def get_windows_tts_manager() -> WindowsTTSManager:
+    """获取全局 Windows TTS 管理器实例"""
+    global _windows_tts_manager
+    if _windows_tts_manager is None:
+        _windows_tts_manager = WindowsTTSManager()
+    return _windows_tts_manager
+
+
 class LiveTranslateClient:
     """
     连接通义 Qwen 实时同传（qwen3-livetranslate-flash-realtime）的轻量客户端。
@@ -331,20 +501,15 @@ class LiveTranslateClient:
     # --------------------- Windows TTS (pyttsx3) ---------------------
 
     def _start_windows_tts_player(self):
-        """启动 Windows TTS 播放器线程"""
+        """启动 Windows TTS 播放器（使用全局管理器）"""
         if not PYTTSX3_AVAILABLE:
             print("[TTS] ERROR: pyttsx3 not available, cannot use Windows TTS")
             return
 
-        if self.windows_tts_thread is None or not self.windows_tts_thread.is_alive():
-            print("[TTS] Creating and starting Windows TTS player thread")
-            self.windows_tts_thread = threading.Thread(
-                target=self._windows_tts_player_task, daemon=True
-            )
-            self.windows_tts_thread.start()
-            print("[TTS] Windows TTS player thread started")
-        else:
-            print("[TTS] Windows TTS player thread already running")
+        # 使用全局 Windows TTS 管理器（单例），避免多实例冲突
+        tts_manager = get_windows_tts_manager()
+        tts_manager.start()
+        print("[TTS] Using global Windows TTS manager")
 
     def _windows_tts_player_task(self):
         """Windows TTS 播放器线程任务"""
@@ -431,9 +596,10 @@ class LiveTranslateClient:
             print("[TTS-WIN] Windows TTS player stopped")
 
     def speak_with_windows_tts(self, text: str):
-        """将文本添加到 Windows TTS 队列"""
+        """将文本添加到全局 Windows TTS 队列"""
         if self.tts_engine == "windows" and self.audio_enabled:
-            self.windows_tts_queue.put(text)
+            tts_manager = get_windows_tts_manager()
+            tts_manager.speak(text, self.target_language)
 
     # --------------------- Receive ---------------------
 
@@ -561,12 +727,10 @@ class LiveTranslateClient:
                 self.audio_player_thread.join(timeout=1)
             print("[AUDIO] Alibaba TTS player stopped.")
 
-        # 关闭 Windows TTS 播放器线程
-        if self.windows_tts_thread:
-            self.windows_tts_queue.put(None)
-            with contextlib.suppress(Exception):
-                self.windows_tts_thread.join(timeout=2)
-            print("[AUDIO] Windows TTS player stopped.")
+        # Windows TTS 使用全局管理器，不需要在会话关闭时停止
+        # 全局管理器会持续运行以服务所有会话
+        if self.tts_engine == "windows":
+            print("[AUDIO] Windows TTS uses global manager, not stopping.")
 
         with contextlib.suppress(Exception):
             self.pyaudio_instance.terminate()

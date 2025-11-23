@@ -146,13 +146,18 @@ class LiveTranslateClient:
                 dev_info = self.pyaudio_instance.get_device_info_by_index(self.output_device_index)
                 dev_rate = int(dev_info.get('defaultSampleRate', 44100))
                 dev_name = dev_info.get('name', 'Unknown')
-                print(f"[TTS] Using output device: {dev_name} (index={self.output_device_index})")
+                print(f"[TTS] Using SPECIFIED output device: {dev_name} (index={self.output_device_index})")
             else:
-                # 获取系统默认输出设备的信息
-                default_out = self.pyaudio_instance.get_default_output_device_info()
-                dev_rate = int(default_out.get('defaultSampleRate', 44100))
-                dev_name = default_out.get('name', 'Unknown')
-                print(f"[TTS] Using DEFAULT output device: {dev_name}")
+                # 不指定设备，让 PyAudio 自动选择系统默认输出设备
+                # 这是最可靠的方式，和独立测试程序的行为一致
+                try:
+                    default_out = self.pyaudio_instance.get_default_output_device_info()
+                    dev_rate = int(default_out.get('defaultSampleRate', 44100))
+                    dev_name = default_out.get('name', 'Unknown')
+                    print(f"[TTS] Using AUTO/SYSTEM DEFAULT output device: {dev_name}")
+                except Exception as e:
+                    print(f"[TTS] Could not get default device info: {e}")
+                    print(f"[TTS] Will let PyAudio choose automatically")
             print(f"[TTS] Device native rate: {dev_rate}Hz, TTS rate: {self.output_rate}Hz")
 
             # Windows 音频驱动器对非原生采样率支持不佳，可能导致堆损坏

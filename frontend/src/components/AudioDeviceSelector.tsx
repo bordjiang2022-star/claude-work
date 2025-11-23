@@ -66,10 +66,16 @@ export const AudioDeviceSelector: React.FC = () => {
 
   // 当输出设备改变时检查是否选择了虚拟设备
   useEffect(() => {
-    if (config.output_device_index !== undefined && outputDevices.length > 0) {
+    // 如果是自动选择模式（undefined），不显示警告
+    if (config.output_device_index === undefined) {
+      setWarning('');
+      return;
+    }
+
+    if (outputDevices.length > 0) {
       const selectedDevice = outputDevices.find(d => d.index === config.output_device_index);
       if (selectedDevice && isVirtualDevice(selectedDevice.name)) {
-        setWarning('⚠️ 警告：您选择了虚拟音频设备作为TTS输出，您将无法通过扬声器听到声音！请选择真实的扬声器设备（如 Realtek 或 Speakers）。');
+        setWarning('⚠️ 警告：您选择了虚拟音频设备作为TTS输出，您将无法通过扬声器听到声音！请选择"自动选择"或真实的扬声器设备。');
       } else {
         setWarning('');
       }
@@ -96,26 +102,11 @@ export const AudioDeviceSelector: React.FC = () => {
         }
       }
 
-      // 输出设备：优先选择真实扬声器（排除虚拟设备）
-      if (response.output_devices.length > 0 && config.output_device_index === undefined) {
-        // 优先查找明确的扬声器设备
-        const realSpeaker = response.output_devices.find(d => isRealSpeaker(d.name));
-
-        if (realSpeaker) {
-          setConfig({ output_device_index: realSpeaker.index });
-          console.log('[AudioDevice] Auto-selected real speaker:', realSpeaker.name, 'index:', realSpeaker.index);
-        } else {
-          // 如果没找到明确的扬声器，选择第一个非虚拟设备
-          const nonVirtualDevice = response.output_devices.find(d => !isVirtualDevice(d.name));
-          if (nonVirtualDevice) {
-            setConfig({ output_device_index: nonVirtualDevice.index });
-            console.log('[AudioDevice] Auto-selected non-virtual device:', nonVirtualDevice.name);
-          } else {
-            // 最后手段：使用第一个设备并显示警告
-            setConfig({ output_device_index: response.output_devices[0].index });
-            setWarning('⚠️ 未找到真实扬声器设备，请手动选择正确的输出设备！');
-          }
-        }
+      // 输出设备：默认使用"自动选择"（undefined），让 PyAudio 使用系统默认设备
+      // 这是最可靠的方式，和用户之前成功的验证程序逻辑一致
+      if (config.output_device_index === undefined) {
+        // 保持 undefined，即"自动选择"
+        console.log('[AudioDevice] Output device: using AUTO (system default) - most reliable');
       }
 
       console.log('[AudioDevice] Loaded devices from backend:', {
@@ -143,9 +134,10 @@ export const AudioDeviceSelector: React.FC = () => {
   };
 
   const handleOutputDeviceChange = (value: string) => {
-    if (value === '') {
+    if (value === '' || value === 'auto') {
       setConfig({ output_device_index: undefined });
-      console.log('[AudioDevice] Output device cleared');
+      console.log('[AudioDevice] Output device set to AUTO (system default)');
+      setWarning(''); // 清除警告
       return;
     }
     const index = Number(value);
@@ -213,11 +205,12 @@ export const AudioDeviceSelector: React.FC = () => {
           🔊 TTS 输出设备 (扬声器/耳机):
         </label>
         <select
-          value={config.output_device_index ?? ''}
+          value={config.output_device_index ?? 'auto'}
           onChange={(e) => handleOutputDeviceChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">-- 选择输出设备 --</option>
+          <option value="auto">🎯 自动选择（系统默认设备 - 推荐）</option>
+          <option value="" disabled>-- 或手动选择设备 --</option>
           {outputDevices.map((device) => (
             <option key={device.index} value={device.index}>
               [{device.index}] {getDeviceDisplayName(device, true)}
@@ -225,8 +218,8 @@ export const AudioDeviceSelector: React.FC = () => {
           ))}
         </select>
         <p className="mt-2 text-xs text-gray-600">
-          <strong>重要：</strong>选择真实的扬声器/耳机来听到TTS翻译语音。
-          <span className="text-red-600"> 不要选择 CABLE/VB-Audio 设备！</span>
+          <strong>推荐：</strong>使用"自动选择"让程序使用系统默认扬声器。
+          <span className="text-red-600"> 手动选择时不要选 CABLE/VB-Audio 设备！</span>
         </p>
       </div>
 

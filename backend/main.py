@@ -615,15 +615,52 @@ async def tts_proxy(text: str, lang: str = "en"):
 
 # ============ 音频设备端点 ============
 
+def _is_internal_mapper(name: str) -> bool:
+    """检查是否是 Windows 内部音频映射器（通常不直接输出声音）"""
+    lower = name.lower()
+    return ('声音映射器' in name or
+            'sound mapper' in lower or
+            '主声音驱动程序' in name or
+            'primary sound driver' in lower)
+
+
+def _deduplicate_devices(devices: list) -> list:
+    """
+    去重设备列表：同一物理设备可能有多个采样率版本
+    保留第一个（通常是默认采样率）
+    """
+    seen_names = set()
+    result = []
+
+    for d in devices:
+        # 提取基础名称（去除采样率等后缀）
+        name = d["name"]
+
+        # 跳过 Windows 内部映射器
+        if _is_internal_mapper(name):
+            continue
+
+        # 检查是否已经有同名设备
+        # 对于相同名称的设备，只保留第一个
+        base_name = name.split('(')[0].strip() if '(' in name else name
+        if base_name not in seen_names:
+            seen_names.add(base_name)
+            result.append(d)
+
+    return result
+
+
 @app.get("/api/audio/devices")
 async def get_audio_devices(current_user: User = Depends(get_current_user)):
     """
     获取可用的音频设备列表
     返回输入设备（麦克风）和输出设备（扬声器）
+    会过滤掉 Windows 内部映射器和去重同一设备的多个采样率版本
     """
     devices = audio_controller.get_audio_devices()
 
-    input_devices = [
+    # 原始列表
+    raw_input_devices = [
         {
             "index": d["index"],
             "name": d["name"],
@@ -632,7 +669,7 @@ async def get_audio_devices(current_user: User = Depends(get_current_user)):
         for d in devices if d["max_input_channels"] > 0
     ]
 
-    output_devices = [
+    raw_output_devices = [
         {
             "index": d["index"],
             "name": d["name"],
@@ -640,6 +677,10 @@ async def get_audio_devices(current_user: User = Depends(get_current_user)):
         }
         for d in devices if d["max_output_channels"] > 0
     ]
+
+    # 去重和过滤
+    input_devices = _deduplicate_devices(raw_input_devices)
+    output_devices = _deduplicate_devices(raw_output_devices)
 
     return {
         "input_devices": input_devices,

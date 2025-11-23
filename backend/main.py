@@ -184,8 +184,14 @@ async def start_translation(
         print(f"[API] TTS output device saved for restore: {speaker_device_name}")
 
     # 切换到虚拟音频线缆
-    if config.audio_enabled:
+    # 注意：只有在使用阿里云 TTS 时才切换系统默认设备
+    # 因为 Windows TTS (pyttsx3) 使用系统默认音频设备，如果切换到 VB-Cable
+    # 会导致 TTS 音频输出到 VB-Cable 而不是扬声器
+    if config.audio_enabled and config.tts_engine != "windows":
         audio_controller.switch_to_virtual_cable()
+    elif config.tts_engine == "windows":
+        print("[API] Using Windows TTS - NOT switching system default device to VB-Cable")
+        print("[API] Windows TTS will output to system default speaker")
 
     # 创建会话记录
     session = TranslationSession(

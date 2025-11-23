@@ -13,6 +13,7 @@ class AudioController:
         self.platform = platform.system()
         self.original_device = None
         self.nircmd_path = None
+        self.saved_speaker_device = None  # 保存TTS使用的扬声器设备名称
 
         # 查找nircmd.exe路径
         if self.platform == "Windows":
@@ -58,13 +59,77 @@ class AudioController:
 
         return success
 
+    def save_speaker_device(self, device_name: str) -> None:
+        """
+        保存TTS输出使用的扬声器设备名称
+        在Stop时将用于恢复系统默认音频输出
+        """
+        if device_name:
+            self.saved_speaker_device = device_name
+            print(f"[AudioControl] Saved speaker device: {device_name}")
+
+    def get_speaker_device_name(self, device_index: Optional[int]) -> Optional[str]:
+        """
+        根据设备索引获取设备名称
+        如果device_index为None，则自动检测真实扬声器
+        """
+        try:
+            import pyaudio
+            pa = pyaudio.PyAudio()
+
+            if device_index is not None:
+                # 使用指定的设备索引
+                info = pa.get_device_info_by_index(device_index)
+                device_name = info.get("name", "")
+                pa.terminate()
+                return device_name
+            else:
+                # 自动检测真实扬声器（与livetranslate_client.py逻辑一致）
+                speaker_keywords = ("Speakers", "Headphones", "Realtek", "耳机", "扬声器")
+                virtual_keywords = ("cable", "virtual", "vb-audio")
+
+                for i in range(pa.get_device_count()):
+                    info = pa.get_device_info_by_index(i)
+                    if int(info.get('maxOutputChannels', 0)) > 0:
+                        name = info.get('name', '')
+                        name_lower = name.lower()
+
+                        # 跳过虚拟音频线缆
+                        if any(vk in name_lower for vk in virtual_keywords):
+                            continue
+
+                        # 选择真实扬声器/耳机
+                        if any(sk.lower() in name_lower for sk in speaker_keywords):
+                            pa.terminate()
+                            print(f"[AudioControl] Auto-detected real speaker: {name}")
+                            return name
+
+                pa.terminate()
+                return None
+        except Exception as e:
+            print(f"[AudioControl] Error getting device name: {e}")
+            return None
+
     def restore_default_device(self) -> bool:
-        """恢复默认音频设备（扬声器）"""
+        """
+        恢复默认音频设备（扬声器）
+        优先使用保存的TTS设备，否则尝试常见扬声器名称
+        """
         if self.platform != "Windows":
             print("[AudioControl] Device restore only supported on Windows")
             return False
 
-        # 尝试常见的扬声器设备名称
+        # 首先尝试恢复到保存的TTS设备
+        if self.saved_speaker_device:
+            print(f"[AudioControl] Restoring to saved device: {self.saved_speaker_device}")
+            if self._run_nircmd("setdefaultsounddevice", self.saved_speaker_device, "1"):
+                print(f"[AudioControl] Successfully restored to {self.saved_speaker_device}")
+                self.saved_speaker_device = None  # 清除保存的设备
+                return True
+            else:
+                print(f"[AudioControl] Failed to restore to saved device, trying alternatives...")
+
+        # 回退：尝试常见的扬声器设备名称
         speaker_names = [
             "Speakers",
             "扬声器",
@@ -76,6 +141,7 @@ class AudioController:
         for name in speaker_names:
             if self._run_nircmd("setdefaultsounddevice", name, "1"):
                 print(f"[AudioControl] Restored to {name}")
+                self.saved_speaker_device = None  # 清除保存的设备
                 return True
 
         print("[AudioControl] Could not restore default audio device")

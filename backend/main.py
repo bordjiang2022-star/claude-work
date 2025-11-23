@@ -175,6 +175,13 @@ async def start_translation(
             detail="Translation session already active"
         )
 
+    # 获取并保存TTS输出设备名称（用于Stop时恢复）
+    # 必须在切换到虚拟音频线缆之前获取
+    speaker_device_name = audio_controller.get_speaker_device_name(config.output_device_index)
+    if speaker_device_name:
+        audio_controller.save_speaker_device(speaker_device_name)
+        print(f"[API] TTS output device saved for restore: {speaker_device_name}")
+
     # 切换到虚拟音频线缆
     if config.audio_enabled:
         audio_controller.switch_to_virtual_cable()

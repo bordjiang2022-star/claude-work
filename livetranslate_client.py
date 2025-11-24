@@ -434,7 +434,8 @@ class WindowsTTSManager:
                         sapi_failures += 1
                         print(f"[TTS-MGR] SAPI direct error: {sapi_err}")
 
-                # 方案2：使用 pyttsx3 直接播放（不用文件方式，更快）
+                # 方案2：使用 pyttsx3 保存到文件，然后通过 PyAudio 播放到指定设备
+                # 这样可以控制输出设备，避免声音输出到 VB-Cable
                 try:
                     if self._pyttsx3_engine is None:
                         # 如果引擎未初始化，尝试初始化
@@ -451,13 +452,29 @@ class WindowsTTSManager:
                             print(f"[TTS-MGR] Switched voice for language: {target_language}")
                         self.current_language = target_language
 
-                    # 直接使用 say() + runAndWait()，比文件方式快得多
-                    self._pyttsx3_engine.say(text)
+                    # 使用 save_to_file 保存到临时文件，然后通过 PyAudio 播放
+                    # 这样可以控制输出设备，解决 pyttsx3 只能输出到默认设备的问题
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                        tmp_path = tmp.name
+
+                    self._pyttsx3_engine.save_to_file(text, tmp_path)
                     self._pyttsx3_engine.runAndWait()
 
-                    elapsed = time.time() - start_time
-                    print(f"[TTS-MGR] pyttsx3 direct play succeeded in {elapsed:.2f}s")
-                    sentences_spoken += 1
+                    # 通过 PyAudio 播放到指定设备
+                    if os.path.exists(tmp_path):
+                        if self._play_wav_to_device(tmp_path, self.output_device_index):
+                            elapsed = time.time() - start_time
+                            print(f"[TTS-MGR] pyttsx3 file+PyAudio succeeded in {elapsed:.2f}s")
+                            sentences_spoken += 1
+                        else:
+                            print("[TTS-MGR] Failed to play WAV file")
+                        # 清理临时文件
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
+                    else:
+                        print(f"[TTS-MGR] pyttsx3 did not create output file: {tmp_path}")
 
                 except RuntimeError as re:
                     # "run loop already started" 错误 - 重新创建引擎

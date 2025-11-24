@@ -1,9 +1,9 @@
 // 主翻译页面
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { useTranslationStore } from '@/hooks/useTranslationStore';
+import { useSpeechRecognition, SpeechRecognitionResult } from '@/hooks/useSpeechRecognition';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { AudioDeviceSelector } from '@/components/AudioDeviceSelector';
 import { TranslationControls } from '@/components/TranslationControls';
@@ -13,10 +13,68 @@ import { wsService } from '@/services/websocket';
 // 注意：TTS 现在由后端 PyAudio 处理，不再使用前端 ttsService
 
 export const TranslatePage: React.FC = () => {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { addTranscript } = useTranslationStore();
+  const {
+    addTranscript,
+    addSourceText,
+    setCurrentSourceText,
+    isTranslating,
+    config,
+  } = useTranslationStore();
+
+  // 语音识别结果回调
+  const handleSpeechResult = useCallback((result: SpeechRecognitionResult) => {
+    console.log('[SpeechRecognition] Result:', result.text, 'isFinal:', result.isFinal);
+    if (result.isFinal) {
+      addSourceText(result.text, true);
+    }
+  }, [addSourceText]);
+
+  // 语音识别错误回调
+  const handleSpeechError = useCallback((error: string) => {
+    console.error('[SpeechRecognition] Error:', error);
+  }, []);
+
+  // 初始化语音识别
+  const {
+    isListening,
+    isSupported: isSpeechSupported,
+    currentTranscript,
+    startListening,
+    stopListening,
+  } = useSpeechRecognition({
+    language: config.source_language || 'zh',
+    continuous: true,
+    interimResults: true,
+    onResult: handleSpeechResult,
+    onError: handleSpeechError,
+  });
+
+  // 更新临时识别文本
+  useEffect(() => {
+    setCurrentSourceText(currentTranscript);
+  }, [currentTranscript, setCurrentSourceText]);
+
+  // 翻译状态变化时，启动/停止语音识别
+  useEffect(() => {
+    if (isTranslating && config.browser_asr_enabled && isSpeechSupported) {
+      console.log('[TranslatePage] Starting speech recognition...');
+      startListening();
+    } else {
+      if (isListening) {
+        console.log('[TranslatePage] Stopping speech recognition...');
+        stopListening();
+      }
+    }
+  }, [isTranslating, config.browser_asr_enabled, isSpeechSupported]);
+
+  // 组件卸载时停止语音识别
+  useEffect(() => {
+    return () => {
+      stopListening();
+    };
+  }, [stopListening]);
 
   useEffect(() => {
     // 检查认证状态

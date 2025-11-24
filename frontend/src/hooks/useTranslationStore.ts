@@ -1,6 +1,6 @@
 // 翻译状态管理
 import { create } from 'zustand';
-import type { TranscriptItem, TranslationConfig } from '@/types';
+import type { TranscriptItem, TranslationConfig, SourceTextItem } from '@/types';
 import { apiService } from '@/services/api';
 import { wsService } from '@/services/websocket';
 
@@ -8,6 +8,8 @@ interface TranslationState {
   isTranslating: boolean;
   config: TranslationConfig;
   transcripts: TranscriptItem[];
+  sourceTexts: SourceTextItem[];  // 浏览器语音识别的原文（独立流）
+  currentSourceText: string;  // 当前正在识别的临时文本
   currentSessionId: number | null;
   error: string | null;
 
@@ -15,6 +17,8 @@ interface TranslationState {
   startTranslation: () => Promise<void>;
   stopTranslation: () => Promise<void>;
   addTranscript: (transcript: Omit<TranscriptItem, 'id'>) => void;
+  addSourceText: (text: string, isFinal: boolean) => void;  // 添加原文
+  setCurrentSourceText: (text: string) => void;  // 设置临时识别文本
   clearTranscripts: () => void;
   downloadTranscript: (type: 'source' | 'translation') => Promise<void>;
 }
@@ -23,11 +27,15 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   isTranslating: false,
   config: {
     target_language: 'en',
+    source_language: 'zh',  // 默认源语言为中文
     voice: 'Cherry',
     audio_enabled: true,
     tts_engine: 'alibaba', // 默认使用阿里云TTS
+    browser_asr_enabled: true, // 默认启用浏览器语音识别
   },
   transcripts: [],
+  sourceTexts: [],
+  currentSourceText: '',
   currentSessionId: null,
   error: null,
 
@@ -85,42 +93,91 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
     }));
   },
 
+  addSourceText: (text, isFinal) => {
+    if (!text.trim()) return;
+    set((state) => ({
+      sourceTexts: [
+        ...state.sourceTexts,
+        {
+          id: state.sourceTexts.length + 1,
+          timestamp: new Date().toISOString(),
+          text: text.trim(),
+          isFinal,
+        },
+      ],
+      currentSourceText: '',  // 清除临时文本
+    }));
+  },
+
+  setCurrentSourceText: (text) => {
+    set({ currentSourceText: text });
+  },
+
   clearTranscripts: () => {
-    set({ transcripts: [] });
+    set({ transcripts: [], sourceTexts: [], currentSourceText: '' });
   },
 
   downloadTranscript: async (type) => {
-    const { transcripts, currentSessionId } = get();
+    const { transcripts, sourceTexts, currentSessionId } = get();
 
-    if (transcripts.length === 0) {
-      throw new Error('No transcripts to download');
-    }
+    // 根据类型选择数据源
+    if (type === 'source') {
+      // 下载原文（来自浏览器语音识别）
+      if (sourceTexts.length === 0) {
+        throw new Error('No source texts to download');
+      }
 
-    try {
-      // 生成文本内容
-      const content = transcripts
-        .map((t) => {
-          const timestamp = new Date(t.timestamp).toLocaleTimeString();
-          const text = type === 'source' ? t.source_text : t.translated_text;
-          return text ? `[${timestamp}] ${text}` : null;
-        })
-        .filter(Boolean)
-        .join('\n');
+      try {
+        const content = sourceTexts
+          .map((t) => {
+            const timestamp = new Date(t.timestamp).toLocaleTimeString();
+            return `[${timestamp}] ${t.text}`;
+          })
+          .join('\n');
 
-      // 创建Blob并下载
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `transcript_${type}_${currentSessionId || Date.now()}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error: any) {
-      const message = error.message || 'Failed to download transcript';
-      set({ error: message });
-      throw error;
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transcript_source_${currentSessionId || Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error: any) {
+        const message = error.message || 'Failed to download source transcript';
+        set({ error: message });
+        throw error;
+      }
+    } else {
+      // 下载译文
+      if (transcripts.length === 0) {
+        throw new Error('No transcripts to download');
+      }
+
+      try {
+        const content = transcripts
+          .map((t) => {
+            const timestamp = new Date(t.timestamp).toLocaleTimeString();
+            return t.translated_text ? `[${timestamp}] ${t.translated_text}` : null;
+          })
+          .filter(Boolean)
+          .join('\n');
+
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transcript_translation_${currentSessionId || Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error: any) {
+        const message = error.message || 'Failed to download transcript';
+        set({ error: message });
+        throw error;
+      }
     }
   },
 }));

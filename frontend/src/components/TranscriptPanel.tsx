@@ -6,7 +6,15 @@ import { format } from 'date-fns';
 
 export const TranscriptPanel: React.FC = () => {
   const { t } = useTranslation();
-  const { transcripts, clearTranscripts, downloadTranscript, isTranslating } = useTranslationStore();
+  const {
+    transcripts,
+    sourceTexts,
+    currentSourceText,
+    clearTranscripts,
+    downloadTranscript,
+    isTranslating,
+    config,
+  } = useTranslationStore();
   const sourceRef = useRef<HTMLDivElement>(null);
   const translationRef = useRef<HTMLDivElement>(null);
 
@@ -18,7 +26,7 @@ export const TranscriptPanel: React.FC = () => {
     if (translationRef.current) {
       translationRef.current.scrollTop = translationRef.current.scrollHeight;
     }
-  }, [transcripts]);
+  }, [transcripts, sourceTexts, currentSourceText]);
 
   const handleDownload = async (type: 'source' | 'translation') => {
     try {
@@ -36,10 +44,12 @@ export const TranscriptPanel: React.FC = () => {
     }
   };
 
-  const sourceCharCount = transcripts.reduce(
-    (sum, t) => sum + (t.source_text?.length || 0),
+  // 原文字符计数（来自浏览器语音识别）
+  const sourceCharCount = sourceTexts.reduce(
+    (sum, t) => sum + t.text.length,
     0
-  );
+  ) + currentSourceText.length;
+
   const translationCharCount = transcripts.reduce(
     (sum, t) => sum + (t.translated_text?.length || 0),
     0
@@ -64,7 +74,7 @@ export const TranscriptPanel: React.FC = () => {
 
           <button
             onClick={() => handleDownload('source')}
-            disabled={transcripts.length === 0}
+            disabled={sourceTexts.length === 0}
             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ⬇️ {t('transcript.downloadSource')}
@@ -97,26 +107,38 @@ export const TranscriptPanel: React.FC = () => {
             ref={sourceRef}
             className="h-[500px] overflow-y-auto p-4 bg-white"
           >
-            {transcripts.length === 0 ? (
+            {sourceTexts.length === 0 && !currentSourceText ? (
               <div className="h-full flex items-center justify-center text-gray-400">
                 {isTranslating
-                  ? t('translation.waitingForInput')
+                  ? (config.browser_asr_enabled
+                      ? t('translation.waitingForSpeech')
+                      : t('translation.browserAsrDisabled'))
                   : t('transcript.noData')}
               </div>
             ) : (
               <div className="space-y-3">
-                {transcripts.map((transcript) => (
-                  <div key={transcript.id} className="border-l-4 border-blue-500 pl-3">
+                {/* 已识别的原文 */}
+                {sourceTexts.map((item) => (
+                  <div key={item.id} className="border-l-4 border-blue-500 pl-3">
                     <div className="text-xs text-gray-500 mb-1">
-                      {formatTime(transcript.timestamp)}
+                      {formatTime(item.timestamp)}
                     </div>
                     <div className="text-gray-800">
-                      {transcript.source_text || (
-                        <span className="text-gray-400 italic">—</span>
-                      )}
+                      {item.text}
                     </div>
                   </div>
                 ))}
+                {/* 正在识别的临时文本 */}
+                {currentSourceText && (
+                  <div className="border-l-4 border-blue-300 pl-3 opacity-70">
+                    <div className="text-xs text-gray-400 mb-1">
+                      {t('translation.recognizing')}
+                    </div>
+                    <div className="text-gray-600 italic">
+                      {currentSourceText}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

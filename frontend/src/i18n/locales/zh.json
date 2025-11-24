@@ -15,17 +15,24 @@
     "logout": "退出登录"
   },
   "translation": {
+    "sourceLanguage": "源语言",
     "targetLanguage": "目标语言",
     "ttsEngine": "TTS引擎",
     "ttsVoice": "TTS音色",
     "windowsTtsNote": "使用Windows系统语音",
+    "browserAsr": "浏览器语音识别",
+    "browserAsrNote": "使用浏览器内置语音识别显示原文",
+    "browserAsrNotSupported": "您的浏览器不支持语音识别",
+    "browserAsrDisabled": "浏览器语音识别已关闭",
     "start": "开始",
     "stop": "停止",
     "translating": "翻译中",
     "source": "原文 (Source)",
     "translation": "译文 (Translation)",
     "waitingForInput": "等待音频输入...",
+    "waitingForSpeech": "等待语音输入...",
     "waitingForTranslation": "等待翻译结果...",
+    "recognizing": "识别中...",
     "characterCount": "{{count}} 字"
   },
   "ttsEngines": {
@@ -85,6 +92,8 @@
     "close": "关闭",
     "loading": "加载中...",
     "error": "错误",
-    "success": "成功"
+    "success": "成功",
+    "enabled": "已开启",
+    "disabled": "已关闭"
   }
 }

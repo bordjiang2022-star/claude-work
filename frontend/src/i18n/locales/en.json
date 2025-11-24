@@ -15,17 +15,24 @@
     "logout": "Logout"
   },
   "translation": {
+    "sourceLanguage": "Source Language",
     "targetLanguage": "Target Language",
     "ttsEngine": "TTS Engine",
     "ttsVoice": "TTS Voice",
     "windowsTtsNote": "Using Windows system voice",
+    "browserAsr": "Browser Speech Recognition",
+    "browserAsrNote": "Use browser built-in speech recognition to display source text",
+    "browserAsrNotSupported": "Your browser does not support speech recognition",
+    "browserAsrDisabled": "Browser speech recognition is disabled",
     "start": "START",
     "stop": "STOP",
     "translating": "Translating",
     "source": "Source",
     "translation": "Translation",
     "waitingForInput": "Waiting for voice input...",
+    "waitingForSpeech": "Waiting for speech input...",
     "waitingForTranslation": "Waiting for translation result...",
+    "recognizing": "Recognizing...",
     "characterCount": "{{count}} characters"
   },
   "ttsEngines": {
@@ -85,6 +92,8 @@
     "close": "Close",
     "loading": "Loading...",
     "error": "Error",
-    "success": "Success"
+    "success": "Success",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
   }
 }

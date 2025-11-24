@@ -15,17 +15,24 @@
     "logout": "ログアウト"
   },
   "translation": {
+    "sourceLanguage": "元言語",
     "targetLanguage": "翻訳先言語",
     "ttsEngine": "TTSエンジン",
     "ttsVoice": "TTS音声",
     "windowsTtsNote": "Windowsシステム音声を使用",
+    "browserAsr": "ブラウザ音声認識",
+    "browserAsrNote": "ブラウザ内蔵の音声認識で原文を表示",
+    "browserAsrNotSupported": "お使いのブラウザは音声認識に対応していません",
+    "browserAsrDisabled": "ブラウザ音声認識は無効です",
     "start": "開始",
     "stop": "停止",
     "translating": "翻訳中",
     "source": "原文 (Source)",
     "translation": "訳文 (Translation)",
     "waitingForInput": "音声入力を待っています...",
+    "waitingForSpeech": "音声入力を待っています...",
     "waitingForTranslation": "翻訳結果を待っています...",
+    "recognizing": "認識中...",
     "characterCount": "{{count}} 文字"
   },
   "ttsEngines": {
@@ -85,6 +92,8 @@
     "close": "閉じる",
     "loading": "読み込み中...",
     "error": "エラー",
-    "success": "成功"
+    "success": "成功",
+    "enabled": "オン",
+    "disabled": "オフ"
   }
 }

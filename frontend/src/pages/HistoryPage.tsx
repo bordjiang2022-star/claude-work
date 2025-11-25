@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
-import apiService from '../services/api';
+import { apiService } from '../services/api';
 
 interface SessionRecord {
   id: number;

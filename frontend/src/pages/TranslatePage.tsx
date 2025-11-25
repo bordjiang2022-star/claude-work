@@ -9,6 +9,7 @@ import { TranslationControls } from '@/components/TranslationControls';
 import { TranscriptPanel } from '@/components/TranscriptPanel';
 import { Header } from '@/components/Header';
 import SessionTimer from '@/components/SessionTimer';
+import { MainLanguageSelector } from '@/components/MainLanguageSelector';
 import { wsService } from '@/services/websocket';
 // 注意：TTS 现在由后端 PyAudio 处理，不再使用前端 ttsService
 
@@ -140,6 +141,9 @@ export const TranslatePage: React.FC = () => {
               <span>{t('translation.settings')}</span>
             </button>
           </div>
+
+          {/* 语言选择器 */}
+          <MainLanguageSelector />
 
           {/* 会话计时器 */}
           <SessionTimer isTranslating={isTranslating} sessionStartTime={sessionStartTime} />

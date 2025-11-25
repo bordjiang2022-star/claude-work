@@ -39,27 +39,20 @@ const SessionTimer: React.FC<SessionTimerProps> = ({ isTranslating, sessionStart
     return parts.join(' ');
   };
 
-  if (!sessionStartTime) {
+  // 只在翻译中且有开始时间时显示计时器
+  if (!isTranslating || !sessionStartTime) {
     return null;
   }
 
   return (
     <div className="bg-blue-50 rounded-lg p-4 mb-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-sm text-gray-600 mb-1">{t('translation.sessionStartTime')}</p>
-          <p className="text-lg font-semibold text-blue-700">
-            {format(sessionStartTime, 'yyyy-MM-dd HH:mm:ss')}
+      <div className="flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-sm text-gray-600 mb-1">{t('translation.sessionElapsedTime')}</p>
+          <p className="text-2xl font-semibold text-green-700">
+            {formatElapsedTime(elapsedTime)}
           </p>
         </div>
-        {isTranslating && (
-          <div>
-            <p className="text-sm text-gray-600 mb-1">{t('translation.sessionElapsedTime')}</p>
-            <p className="text-lg font-semibold text-green-700">
-              {formatElapsedTime(elapsedTime)}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

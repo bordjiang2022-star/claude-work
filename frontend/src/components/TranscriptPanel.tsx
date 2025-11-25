@@ -57,49 +57,41 @@ export const TranscriptPanel: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* 标题和操作按钮 */}
+      {/* 标题和清除按钮 */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-800 flex items-center">
           📝 {t('transcript.title')}
         </h2>
 
-        <div className="flex space-x-2">
-          <button
-            onClick={clearTranscripts}
-            disabled={transcripts.length === 0}
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            🗑️ {t('transcript.clear')}
-          </button>
-
-          <button
-            onClick={() => handleDownload('source')}
-            disabled={sourceTexts.length === 0}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ⬇️ {t('transcript.downloadSource')}
-          </button>
-
-          <button
-            onClick={() => handleDownload('translation')}
-            disabled={transcripts.length === 0}
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ⬇️ {t('transcript.downloadTranslation')}
-          </button>
-        </div>
+        <button
+          onClick={clearTranscripts}
+          disabled={transcripts.length === 0}
+          className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          🗑️ {t('transcript.clear')}
+        </button>
       </div>
 
       {/* 双栏显示 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 原文面板 */}
         <div className="border border-gray-300 rounded-lg overflow-hidden">
+          {/* 原文面板标题栏 - 包含下载按钮 */}
           <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-700">{t('translation.source')}</h3>
               <span className="text-sm text-gray-500">
                 {t('translation.characterCount', { count: sourceCharCount })}
               </span>
+            </div>
+            <div className="flex justify-start">
+              <button
+                onClick={() => handleDownload('source')}
+                disabled={sourceTexts.length === 0}
+                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ⬇️ {t('transcript.downloadSource')}
+              </button>
             </div>
           </div>
 
@@ -146,12 +138,22 @@ export const TranscriptPanel: React.FC = () => {
 
         {/* 译文面板 */}
         <div className="border border-gray-300 rounded-lg overflow-hidden">
+          {/* 译文面板标题栏 - 包含下载按钮 */}
           <div className="bg-green-50 px-4 py-3 border-b border-gray-300">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-700">{t('translation.translation')}</h3>
               <span className="text-sm text-gray-500">
                 {t('translation.characterCount', { count: translationCharCount })}
               </span>
+            </div>
+            <div className="flex justify-start">
+              <button
+                onClick={() => handleDownload('translation')}
+                disabled={transcripts.length === 0}
+                className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-sm rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ⬇️ {t('transcript.downloadTranslation')}
+              </button>
             </div>
           </div>
 

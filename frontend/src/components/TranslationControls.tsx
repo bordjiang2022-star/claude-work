@@ -7,10 +7,8 @@ export const TranslationControls: React.FC = () => {
   const { t } = useTranslation();
   const {
     isTranslating,
-    isPaused,
     startTranslation,
-    pauseTranslation,
-    resumeTranslation,
+    stopTranslation,
     error,
     config
   } = useTranslationStore();
@@ -23,14 +21,12 @@ export const TranslationControls: React.FC = () => {
     }
   };
 
-  const handlePause = () => {
-    // 暂停翻译（不停止后端服务）
-    pauseTranslation();
-  };
-
-  const handleResume = () => {
-    // 恢复翻译
-    resumeTranslation();
+  const handleStop = async () => {
+    try {
+      await stopTranslation();
+    } catch (err) {
+      console.error('Failed to stop translation:', err);
+    }
   };
 
   return (
@@ -60,38 +56,22 @@ export const TranslationControls: React.FC = () => {
           {t('translation.start')}
         </button>
 
-        {/* PAUSE/RESUME按钮 */}
-        {isTranslating && !isPaused && (
+        {/* STOP按钮 */}
+        {isTranslating && (
           <button
-            onClick={handlePause}
-            className="px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px] bg-yellow-600 hover:bg-yellow-700 text-white shadow-lg hover:shadow-xl"
+            onClick={handleStop}
+            className="px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px] bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl"
           >
-            {t('translation.pause')}
-          </button>
-        )}
-
-        {isTranslating && isPaused && (
-          <button
-            onClick={handleResume}
-            className="px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px] bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl"
-          >
-            {t('translation.resume')}
+            {t('translation.stop')}
           </button>
         )}
       </div>
 
       {/* 状态指示 */}
-      {isTranslating && !isPaused && (
+      {isTranslating && (
         <div className="mt-4 flex items-center space-x-2 text-green-600">
           <div className="w-3 h-3 bg-green-600 rounded-full animate-pulse"></div>
           <span className="font-medium">{t('translation.translating')}</span>
-        </div>
-      )}
-
-      {isTranslating && isPaused && (
-        <div className="mt-4 flex items-center space-x-2 text-yellow-600">
-          <div className="w-3 h-3 bg-yellow-600 rounded-full"></div>
-          <span className="font-medium">{t('translation.paused')}</span>
         </div>
       )}
 

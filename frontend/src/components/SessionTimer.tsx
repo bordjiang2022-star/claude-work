@@ -13,6 +13,7 @@ const SessionTimer: React.FC<SessionTimerProps> = ({ isTranslating, sessionStart
 
   useEffect(() => {
     if (!isTranslating || !sessionStartTime) {
+      setElapsedTime(0);
       return;
     }
 
@@ -39,17 +40,12 @@ const SessionTimer: React.FC<SessionTimerProps> = ({ isTranslating, sessionStart
     return parts.join(' ');
   };
 
-  // 只在翻译中且有开始时间时显示计时器
-  if (!isTranslating || !sessionStartTime) {
-    return null;
-  }
-
   return (
     <div className="bg-blue-50 rounded-lg p-4 mb-4">
       <div className="flex items-center justify-center">
         <div className="text-center">
           <p className="text-sm text-gray-600 mb-1">{t('translation.sessionElapsedTime')}</p>
-          <p className="text-2xl font-semibold text-green-700">
+          <p className={`text-2xl font-semibold ${isTranslating ? 'text-green-700' : 'text-gray-500'}`}>
             {formatElapsedTime(elapsedTime)}
           </p>
         </div>

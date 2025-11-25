@@ -48,7 +48,7 @@ export const TranslationControls: React.FC = () => {
             px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px]
             ${
               isTranslating
-                ? 'bg-gray-300 cursor-not-allowed'
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
             }
           `}
@@ -57,14 +57,20 @@ export const TranslationControls: React.FC = () => {
         </button>
 
         {/* STOP按钮 */}
-        {isTranslating && (
-          <button
-            onClick={handleStop}
-            className="px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px] bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl"
-          >
-            {t('translation.stop')}
-          </button>
-        )}
+        <button
+          onClick={handleStop}
+          disabled={!isTranslating}
+          className={`
+            px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px]
+            ${
+              !isTranslating
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl'
+            }
+          `}
+        >
+          {t('translation.stop')}
+        </button>
       </div>
 
       {/* 状态指示 */}
@@ -72,13 +78,6 @@ export const TranslationControls: React.FC = () => {
         <div className="mt-4 flex items-center space-x-2 text-green-600">
           <div className="w-3 h-3 bg-green-600 rounded-full animate-pulse"></div>
           <span className="font-medium">{t('translation.translating')}</span>
-        </div>
-      )}
-
-      {/* TTS 状态提示 */}
-      {config.audio_enabled && (
-        <div className="mt-4 text-center text-sm text-gray-600 bg-blue-50 px-4 py-2 rounded">
-          TTS audio will play through the selected output device (backend PyAudio)
         </div>
       )}
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranslationStore } from '../hooks/useTranslationStore';
 import LanguageSelector from '../components/LanguageSelector';
-import AudioDeviceSelector from '../components/AudioDeviceSelector';
+import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
 
 const SettingsPage: React.FC = () => {
   const { t } = useTranslation();

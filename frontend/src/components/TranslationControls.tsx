@@ -5,7 +5,15 @@ import { useTranslationStore } from '@/hooks/useTranslationStore';
 
 export const TranslationControls: React.FC = () => {
   const { t } = useTranslation();
-  const { isTranslating, startTranslation, stopTranslation, error, config } = useTranslationStore();
+  const {
+    isTranslating,
+    isPaused,
+    startTranslation,
+    pauseTranslation,
+    resumeTranslation,
+    error,
+    config
+  } = useTranslationStore();
 
   const handleStart = async () => {
     try {
@@ -15,13 +23,14 @@ export const TranslationControls: React.FC = () => {
     }
   };
 
-  const handleStop = async () => {
-    try {
-      // 停止翻译（后端会自动停止 TTS）
-      await stopTranslation();
-    } catch (err) {
-      console.error('Failed to stop translation:', err);
-    }
+  const handlePause = () => {
+    // 暂停翻译（不停止后端服务）
+    pauseTranslation();
+  };
+
+  const handleResume = () => {
+    // 恢复翻译
+    resumeTranslation();
   };
 
   return (
@@ -44,35 +53,45 @@ export const TranslationControls: React.FC = () => {
             ${
               isTranslating
                 ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-primary-600 hover:bg-primary-700 text-white shadow-lg hover:shadow-xl'
+                : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
             }
           `}
         >
           {t('translation.start')}
         </button>
 
-        {/* STOP按钮 */}
-        <button
-          onClick={handleStop}
-          disabled={!isTranslating}
-          className={`
-            px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px]
-            ${
-              !isTranslating
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-gray-600 hover:bg-gray-700 text-white shadow-lg hover:shadow-xl'
-            }
-          `}
-        >
-          {t('translation.stop')}
-        </button>
+        {/* PAUSE/RESUME按钮 */}
+        {isTranslating && !isPaused && (
+          <button
+            onClick={handlePause}
+            className="px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px] bg-yellow-600 hover:bg-yellow-700 text-white shadow-lg hover:shadow-xl"
+          >
+            {t('translation.pause')}
+          </button>
+        )}
+
+        {isTranslating && isPaused && (
+          <button
+            onClick={handleResume}
+            className="px-8 py-4 rounded-lg font-semibold text-lg transition duration-200 min-w-[150px] bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl"
+          >
+            {t('translation.resume')}
+          </button>
+        )}
       </div>
 
       {/* 状态指示 */}
-      {isTranslating && (
-        <div className="mt-4 flex items-center space-x-2 text-primary-600">
-          <div className="w-3 h-3 bg-primary-600 rounded-full animate-pulse"></div>
+      {isTranslating && !isPaused && (
+        <div className="mt-4 flex items-center space-x-2 text-green-600">
+          <div className="w-3 h-3 bg-green-600 rounded-full animate-pulse"></div>
           <span className="font-medium">{t('translation.translating')}</span>
+        </div>
+      )}
+
+      {isTranslating && isPaused && (
+        <div className="mt-4 flex items-center space-x-2 text-yellow-600">
+          <div className="w-3 h-3 bg-yellow-600 rounded-full"></div>
+          <span className="font-medium">{t('translation.paused')}</span>
         </div>
       )}
 

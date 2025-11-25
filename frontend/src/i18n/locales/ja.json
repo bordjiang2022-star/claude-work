@@ -26,14 +26,22 @@
     "browserAsrDisabled": "ブラウザ音声認識は無効です",
     "start": "開始",
     "stop": "停止",
+    "pause": "一時停止",
+    "resume": "再開",
     "translating": "翻訳中",
+    "paused": "一時停止中",
     "source": "原文 (Source)",
     "translation": "訳文 (Translation)",
     "waitingForInput": "音声入力を待っています...",
     "waitingForSpeech": "音声入力を待っています...",
     "waitingForTranslation": "翻訳結果を待っています...",
     "recognizing": "認識中...",
-    "characterCount": "{{count}} 文字"
+    "characterCount": "{{count}} 文字",
+    "sessionStartTime": "開始時刻",
+    "sessionElapsedTime": "経過時間",
+    "sessionEndTime": "終了時刻",
+    "sessionDuration": "利用時間",
+    "settings": "設定"
   },
   "ttsEngines": {
     "alibaba": "アリババクラウド (Alibaba)",
@@ -83,7 +91,32 @@
     "theme": "テーマ",
     "light": "ライト",
     "dark": "ダーク",
-    "audioDevice": "オーディオデバイス"
+    "audioDevice": "オーディオデバイス",
+    "audioInput": "音声入力",
+    "audioOutput": "音声出力 (TTS)",
+    "ttsSettings": "TTS設定",
+    "voiceSettings": "音声設定"
+  },
+  "history": {
+    "title": "利用履歴",
+    "menuTitle": "履歴",
+    "dateRange": "期間",
+    "from": "開始日",
+    "to": "終了日",
+    "search": "検索",
+    "totalTime": "総利用時間",
+    "sessionCount": "セッション数",
+    "startTime": "開始時刻",
+    "endTime": "終了時刻",
+    "duration": "利用時間",
+    "targetLanguage": "翻訳先言語",
+    "noRecords": "記録がありません",
+    "hours": "時間",
+    "minutes": "分",
+    "seconds": "秒"
+  },
+  "footer": {
+    "copyright": "Copyright @Tokyo NGS"
   },
   "common": {
     "save": "保存",

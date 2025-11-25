@@ -26,14 +26,22 @@
     "browserAsrDisabled": "Browser speech recognition is disabled",
     "start": "START",
     "stop": "STOP",
+    "pause": "PAUSE",
+    "resume": "RESUME",
     "translating": "Translating",
+    "paused": "Paused",
     "source": "Source",
     "translation": "Translation",
     "waitingForInput": "Waiting for voice input...",
     "waitingForSpeech": "Waiting for speech input...",
     "waitingForTranslation": "Waiting for translation result...",
     "recognizing": "Recognizing...",
-    "characterCount": "{{count}} characters"
+    "characterCount": "{{count}} characters",
+    "sessionStartTime": "Start Time",
+    "sessionElapsedTime": "Elapsed Time",
+    "sessionEndTime": "End Time",
+    "sessionDuration": "Duration",
+    "settings": "Settings"
   },
   "ttsEngines": {
     "alibaba": "Alibaba Cloud",
@@ -83,7 +91,32 @@
     "theme": "Theme",
     "light": "Light",
     "dark": "Dark",
-    "audioDevice": "Audio Device"
+    "audioDevice": "Audio Device",
+    "audioInput": "Audio Input",
+    "audioOutput": "Audio Output (TTS)",
+    "ttsSettings": "TTS Settings",
+    "voiceSettings": "Voice Settings"
+  },
+  "history": {
+    "title": "Usage History",
+    "menuTitle": "History",
+    "dateRange": "Date Range",
+    "from": "From",
+    "to": "To",
+    "search": "Search",
+    "totalTime": "Total Time",
+    "sessionCount": "Sessions",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "duration": "Duration",
+    "targetLanguage": "Target Language",
+    "noRecords": "No records found",
+    "hours": "hours",
+    "minutes": "minutes",
+    "seconds": "seconds"
+  },
+  "footer": {
+    "copyright": "Copyright @Tokyo NGS"
   },
   "common": {
     "save": "Save",

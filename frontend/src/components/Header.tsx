@@ -1,12 +1,15 @@
 // 顶部导航栏组件
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import type { Language } from '@/types';
 
 export const Header: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   const languages: { code: Language; label: string }[] = [
@@ -22,13 +25,17 @@ export const Header: React.FC = () => {
     setShowLangMenu(false);
   };
 
+  const handleLogout = async () => {
+    await logout();
+  };
+
   return (
     <header className="bg-primary-600 text-white shadow-lg">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center">
-            <span className="text-3xl mr-2">🌐</span>
+            <img src="/MyIcon.png" alt="LiveTranslate" className="w-12 h-12 mr-3" />
             <div>
               <h1 className="text-2xl font-bold">{t('app.title')}</h1>
               <p className="text-sm text-primary-100">{t('app.subtitle')}</p>
@@ -37,6 +44,40 @@ export const Header: React.FC = () => {
 
           {/* 右侧菜单 */}
           <div className="flex items-center space-x-4">
+            {/* 导航菜单 */}
+            <nav className="flex items-center space-x-2">
+              <button
+                onClick={() => navigate('/')}
+                className={`px-4 py-2 rounded-lg transition ${
+                  location.pathname === '/'
+                    ? 'bg-primary-700 font-semibold'
+                    : 'hover:bg-primary-500'
+                }`}
+              >
+                {t('app.title')}
+              </button>
+              <button
+                onClick={() => navigate('/settings')}
+                className={`px-4 py-2 rounded-lg transition ${
+                  location.pathname === '/settings'
+                    ? 'bg-primary-700 font-semibold'
+                    : 'hover:bg-primary-500'
+                }`}
+              >
+                {t('settings.title')}
+              </button>
+              <button
+                onClick={() => navigate('/history')}
+                className={`px-4 py-2 rounded-lg transition ${
+                  location.pathname === '/history'
+                    ? 'bg-primary-700 font-semibold'
+                    : 'hover:bg-primary-500'
+                }`}
+              >
+                {t('history.menuTitle')}
+              </button>
+            </nav>
+
             {/* 语言切换 */}
             <div className="relative">
               <button
@@ -65,7 +106,7 @@ export const Header: React.FC = () => {
             <div className="flex items-center space-x-2">
               <span className="text-sm">{user?.email}</span>
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition"
               >
                 {t('auth.logout')}

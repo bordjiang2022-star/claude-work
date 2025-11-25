@@ -16,8 +16,8 @@ i18n
       ja: { translation: ja },
       ko: { translation: ko },
     },
-    lng: 'en', // 默认语言
-    fallbackLng: 'en',
+    lng: 'ja', // 默认语言
+    fallbackLng: 'ja',
     interpolation: {
       escapeValue: false,
     },

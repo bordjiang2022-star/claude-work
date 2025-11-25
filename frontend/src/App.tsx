@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { LoginPage } from '@/pages/LoginPage';
 import { TranslatePage } from '@/pages/TranslatePage';
+import SettingsPage from '@/pages/SettingsPage';
+import HistoryPage from '@/pages/HistoryPage';
 import { apiService } from '@/services/api';
 
 const App: React.FC = () => {
@@ -27,6 +29,14 @@ const App: React.FC = () => {
         <Route
           path="/"
           element={isAuthenticated ? <TranslatePage /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/settings"
+          element={isAuthenticated ? <SettingsPage /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/history"
+          element={isAuthenticated ? <HistoryPage /> : <Navigate to="/login" />}
         />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

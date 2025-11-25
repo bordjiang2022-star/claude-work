@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { User } from '@/types';
 import { apiService } from '@/services/api';
+import { useTranslationStore } from './useTranslationStore';
 
 interface AuthState {
   user: User | null;
@@ -11,7 +12,7 @@ interface AuthState {
 
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
   clearError: () => void;
 }
@@ -48,7 +49,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    // 如果有活跃的翻译会话，先停止它
+    const { isTranslating, stopTranslation } = useTranslationStore.getState();
+    if (isTranslating) {
+      try {
+        await stopTranslation();
+      } catch (error) {
+        console.error('Failed to stop translation during logout:', error);
+      }
+    }
+
     apiService.logout();
     set({ user: null, isAuthenticated: false });
   },

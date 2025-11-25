@@ -6,16 +6,20 @@ import { wsService } from '@/services/websocket';
 
 interface TranslationState {
   isTranslating: boolean;
+  isPaused: boolean;  // 是否暂停（不停止后端服务）
   config: TranslationConfig;
   transcripts: TranscriptItem[];
   sourceTexts: SourceTextItem[];  // 浏览器语音识别的原文（独立流）
   currentSourceText: string;  // 当前正在识别的临时文本
   currentSessionId: number | null;
+  sessionStartTime: Date | null;  // 会话开始时间
   error: string | null;
 
   setConfig: (config: Partial<TranslationConfig>) => void;
   startTranslation: () => Promise<void>;
   stopTranslation: () => Promise<void>;
+  pauseTranslation: () => void;
+  resumeTranslation: () => void;
   addTranscript: (transcript: Omit<TranscriptItem, 'id'>) => void;
   addSourceText: (text: string, isFinal: boolean) => void;  // 添加原文
   setCurrentSourceText: (text: string) => void;  // 设置临时识别文本
@@ -25,6 +29,7 @@ interface TranslationState {
 
 export const useTranslationStore = create<TranslationState>((set, get) => ({
   isTranslating: false,
+  isPaused: false,
   config: {
     target_language: 'en',
     source_language: 'zh',  // 默认源语言为中文
@@ -37,6 +42,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   sourceTexts: [],
   currentSourceText: '',
   currentSessionId: null,
+  sessionStartTime: null,
   error: null,
 
   setConfig: (newConfig) => {
@@ -55,6 +61,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       set({
         isTranslating: true,
         currentSessionId: response.session_id,
+        sessionStartTime: new Date(),
         transcripts: [],
       });
 
@@ -73,7 +80,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   stopTranslation: async () => {
     try {
       await apiService.stopTranslation();
-      set({ isTranslating: false });
+      set({ isTranslating: false, isPaused: false });
 
       // 断开WebSocket
       wsService.disconnect();
@@ -82,6 +89,16 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       set({ error: message });
       throw error;
     }
+  },
+
+  pauseTranslation: () => {
+    // 暂停翻译（不停止后端服务）
+    set({ isPaused: true });
+  },
+
+  resumeTranslation: () => {
+    // 恢复翻译
+    set({ isPaused: false });
   },
 
   addTranscript: (transcript) => {

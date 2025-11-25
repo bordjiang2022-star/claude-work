@@ -1,18 +1,19 @@
 // 主翻译页面
 import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { useTranslationStore } from '@/hooks/useTranslationStore';
 import { useSpeechRecognition, SpeechRecognitionResult } from '@/hooks/useSpeechRecognition';
-import { LanguageSelector } from '@/components/LanguageSelector';
-import { AudioDeviceSelector } from '@/components/AudioDeviceSelector';
 import { TranslationControls } from '@/components/TranslationControls';
 import { TranscriptPanel } from '@/components/TranscriptPanel';
 import { Header } from '@/components/Header';
+import SessionTimer from '@/components/SessionTimer';
 import { wsService } from '@/services/websocket';
 // 注意：TTS 现在由后端 PyAudio 处理，不再使用前端 ttsService
 
 export const TranslatePage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const {
@@ -20,6 +21,7 @@ export const TranslatePage: React.FC = () => {
     addSourceText,
     setCurrentSourceText,
     isTranslating,
+    sessionStartTime,
     config,
   } = useTranslationStore();
 
@@ -123,20 +125,37 @@ export const TranslatePage: React.FC = () => {
 
       {/* 主内容区 */}
       <main className="container mx-auto px-4 py-6">
-        {/* 语言选择和控制面板 */}
+        {/* 控制面板 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <LanguageSelector />
-          <div className="mt-4">
-            <AudioDeviceSelector />
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">
+              {t('app.title')}
+            </h2>
+            <button
+              onClick={() => navigate('/settings')}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-200 shadow-sm flex items-center space-x-2"
+              disabled={isTranslating}
+            >
+              <span>⚙️</span>
+              <span>{t('translation.settings')}</span>
+            </button>
           </div>
-          <div className="mt-6">
-            <TranslationControls />
-          </div>
+
+          {/* 会话计时器 */}
+          <SessionTimer isTranslating={isTranslating} sessionStartTime={sessionStartTime} />
+
+          {/* 翻译控制按钮 */}
+          <TranslationControls />
         </div>
 
         {/* 转录面板 */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <TranscriptPanel />
+        </div>
+
+        {/* 版权信息 */}
+        <div className="text-center text-gray-500 text-sm mt-6 py-4">
+          {t('footer.copyright')}
         </div>
       </main>
     </div>

@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # Backend service - FastAPI application
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: livetranslate-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys and secrets - Load from .env file
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+
+      # Database configuration
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/livetranslate.db
+
+      # Server configuration
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8000
+
+      # Locale support for CJK
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+    volumes:
+      # Persist database
+      - db-data:/app/data
+      # Optional: Mount logs directory
+      - ./logs/backend:/app/logs
+    networks:
+      - livetranslate-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend service - React + Nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: livetranslate-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Nginx configuration
+      - NGINX_HOST=localhost
+      - NGINX_PORT=3000
+
+      # Locale support for CJK
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - livetranslate-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+# Named volumes for data persistence
+volumes:
+  db-data:
+    driver: local
+    name: livetranslate-db-data
+
+# Custom network for service communication
+networks:
+  livetranslate-network:
+    driver: bridge
+    name: livetranslate-network

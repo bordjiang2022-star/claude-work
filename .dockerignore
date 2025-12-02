@@ -1,0 +1,77 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+backend/venv
+backend/env
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Node.js
+frontend/node_modules
+frontend/dist
+frontend/.vite
+**/.npm
+**/.pnpm-store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs
+**/.DS_Store
+
+# Documentation
+*.md
+!README.md
+!DOCKER.md
+docs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Test files
+test/
+tests/
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db

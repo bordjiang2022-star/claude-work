@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  livetranslate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: livetranslate-web
+    ports:
+      - "8000:8000"
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# 使用方法:
+# 1. 创建 .env 文件，设置 DASHSCOPE_API_KEY=your_api_key
+# 2. docker-compose up -d
+# 3. 访问 http://localhost:8000
